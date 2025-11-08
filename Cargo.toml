@@ -27,5 +27,5 @@ anyhow = "1"
 
 lazy-static-include = "3.1.1"
 html-minifier = "4"
-comrak = { version = "0.19", default-features = false }
+comrak = { version = "0.47", default-features = false, features = ["bon"] }
 html-escape = "0.2"
