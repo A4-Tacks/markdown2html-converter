@@ -4,7 +4,7 @@ use std::{borrow::Cow, fs, io};
 
 use anyhow::{anyhow, Context};
 use cli::*;
-use comrak::{markdown_to_html, ComrakOptions};
+use comrak::{markdown_to_html, Options as ComrakOptions};
 use html_minifier::HTMLMinifier;
 use lazy_static_include::lazy_static_include_str;
 
@@ -78,17 +78,30 @@ fn main() -> anyhow::Result<()> {
         let mut options = ComrakOptions::default();
 
         if args.no_safe {
-            options.render.unsafe_ = true;
+            options.render.r#unsafe = true;
         }
 
         options.extension.autolink = true;
         options.extension.description_lists = true;
         options.extension.footnotes = true;
+        options.extension.inline_footnotes = true;
+        options.extension.multiline_block_quotes = true;
+        options.extension.math_dollars = true;
+        options.extension.math_code = true;
+        options.extension.wikilinks_title_after_pipe = true;
+        options.extension.wikilinks_title_before_pipe = true;
+        options.extension.underline = true;
+        options.extension.subscript = true;
+        options.extension.spoiler = true;
+        options.extension.greentext = true;
+        options.extension.cjk_friendly_emphasis = true;
+        options.extension.subtext = true;
         options.extension.strikethrough = true;
         options.extension.superscript = true;
         options.extension.table = true;
         options.extension.tagfilter = true;
         options.extension.tasklist = true;
+        options.extension.alerts = true;
         options.render.hardbreaks = true;
 
         markdown_to_html(&markdown, &options)
