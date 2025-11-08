@@ -76,6 +76,7 @@ fn main() -> anyhow::Result<()> {
 
     let markdown_html = {
         let mut options = ComrakOptions::default();
+        options.extension.header_ids = args.header_ids;
 
         if args.no_safe {
             options.render.r#unsafe = true;
