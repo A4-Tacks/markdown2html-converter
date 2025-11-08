@@ -48,6 +48,10 @@ pub struct CLIArgs {
     pub no_safe: bool,
 
     #[arg(long)]
+    #[arg(help = "Use the header IDs extension, with the given ID prefix")]
+    pub header_ids: Option<String>,
+
+    #[arg(long)]
     #[arg(help = "Not allow to use highlight.js")]
     pub no_highlight: bool,
 
