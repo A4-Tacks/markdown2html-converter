@@ -85,7 +85,7 @@ fn main() -> anyhow::Result<()> {
         options.extension.description_lists = true;
         options.extension.footnotes = true;
         options.extension.inline_footnotes = true;
-        options.extension.multiline_block_quotes = true;
+        //options.extension.multiline_block_quotes = true;
         options.extension.math_dollars = true;
         options.extension.math_code = true;
         options.extension.wikilinks_title_after_pipe = true;
@@ -93,7 +93,7 @@ fn main() -> anyhow::Result<()> {
         options.extension.underline = true;
         options.extension.subscript = true;
         options.extension.spoiler = true;
-        options.extension.greentext = true;
+        //options.extension.greentext = true;
         options.extension.cjk_friendly_emphasis = true;
         options.extension.subtext = true;
         options.extension.strikethrough = true;
