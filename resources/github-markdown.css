@@ -1222,6 +1222,10 @@
   border-left-color: var(--color-attention-fg);
 }
 
+.markdown-body .markdown-alert.markdown-alert-tip {
+  border-left-color: #6ecb63;
+}
+
 .markdown-body {
     box-sizing: border-box;
     min-width: 200px;
