@@ -2,7 +2,9 @@ EXECUTABLE_NAME := markdown2html-converter
 
 all: ./target/x86_64-unknown-linux-musl/release/$(EXECUTABLE_NAME)
 
-./target/x86_64-unknown-linux-musl/release/$(EXECUTABLE_NAME): $(shell find . -type f -iname '*.rs' -o -name 'Cargo.toml' | grep -v ./target | sed 's/ /\\ /g') $(shell find ./resources -type f | sed 's/ /\\ /g')
+SOURCE_FILES := $(shell find . -type f \( -iname '*.rs' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) | sed 's/ /\\ /g')
+RESOURCE_PATHS := $(shell find ./resources \( -type f -o -type d \) | sed 's/ /\\ /g')
+./target/x86_64-unknown-linux-musl/release/$(EXECUTABLE_NAME): $(SOURCE_FILES) $(RESOURCE_PATHS)
 	cargo build --release --target x86_64-unknown-linux-musl
 	
 install:
