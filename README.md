@@ -24,21 +24,22 @@ Arguments:
 Options:
   -t, --title <TITLE>                            Specify the title of your HTML file
   -o, --output <OUTPUT>                          Specify the path of your HTML file, or `-` for the standard output
-  -f, --force                                    Force to output if the HTML file exists
+  -f, --force                                    Overwrite the HTML file if it exists
   -l, --lang <LANG>                              Specify the language of your HTML file [default: en]
       --theme <THEME>                            Specify the color theme of your HTML file [possible values: auto, light, dark] [default: auto]
       --unsafe                                   Allow raw HTML and dangerous URLs
-      --embed-images                             Embed local images as `data` URLs
-      --no-highlight                             Not allow to use highlight.js
-      --no-math                                  Not allow to use MathJax
-      --no-cjk-fonts                             Not allow to use CJK fonts
-      --no-hardbreaks                            Not treat a single line break as a line break
-      --no-minify                                Not minify the output HTML
-      --css-path <CSS_PATH>                      Specify the path of your custom CSS file
-      --extra-css-path <EXTRA_CSS_PATH>          Specify the path of an extra CSS file to append
-      --highlight-js-path <HIGHLIGHT_JS_PATH>    Specify the path of your custom highlight.js file
-      --highlight-css-path <HIGHLIGHT_CSS_PATH>  Specify the path of your custom CSS file for highlight.js code blocks
-      --mathjax-js-path <MATHJAX_JS_PATH>        Specify the path of your custom single MathJax file
+      --embed-images                             Embed local images as data URLs
+      --base-path <BASE_PATH>                    Specify the base directory for relative local images
+      --no-highlight                             Do not embed highlight.js
+      --no-math                                  Do not embed MathJax
+      --no-cjk-fonts                             Do not embed CJK fonts
+      --no-hardbreaks                            Do not render single line breaks as <br>
+      --no-minify                                Do not minify the output HTML
+      --css-path <CSS_PATH>                      Specify a CSS file that replaces built-in Markdown styles
+      --extra-css-path <EXTRA_CSS_PATH>          Specify an extra CSS file to append after all stylesheets
+      --highlight-js-path <HIGHLIGHT_JS_PATH>    Specify a custom highlight.js file
+      --highlight-css-path <HIGHLIGHT_CSS_PATH>  Specify custom CSS for highlight.js code blocks
+      --mathjax-js-path <MATHJAX_JS_PATH>        Specify a custom single-file MathJax bundle
   -h, --help                                     Print help
   -V, --version                                  Print version
 ```
@@ -51,6 +52,16 @@ The title of the output HTML file is looked up in this order.
 2. The `title` entry of the YAML front matter of the Markdown file.
 3. The first level-1 heading of the Markdown file.
 4. The file name of the Markdown file.
+
+When an output file is explicitly specified with `-o` (`--output`), its file name is used as the fallback title instead.
+
+## Custom Assets
+
+`--css-path` replaces the built-in Markdown stylesheet. `--extra-css-path` is appended after every generated stylesheet, so it can override any built-in or custom styles. `--highlight-js-path`, `--highlight-css-path`, and `--mathjax-js-path` replace their respective built-in assets.
+
+Custom CSS and JavaScript are embedded in the generated HTML. Use only trusted files.
+
+`--base-path` controls how relative local image paths are resolved by `--embed-images`. It defaults to the Markdown file's directory and is required to choose another directory when reading Markdown from the standard input.
 
 ## Dependency
 

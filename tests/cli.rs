@@ -50,6 +50,47 @@ fn the_html_file_is_written_next_to_the_markdown_file() {
 }
 
 #[test]
+fn the_output_file_name_is_used_as_the_fallback_title() {
+    let dir = temp_dir("output-title");
+    let markdown_path = dir.join("input.md");
+    let html_path = dir.join("output.html");
+
+    fs::write(markdown_path.as_path(), "Just a paragraph.").unwrap();
+
+    let status = Command::new(EXECUTABLE)
+        .arg(markdown_path.as_path())
+        .arg("-o")
+        .arg(html_path.as_path())
+        .status()
+        .unwrap();
+
+    let html = fs::read_to_string(html_path.as_path()).unwrap();
+
+    assert!(status.success());
+    assert!(html.contains("<title>output</title>"));
+}
+
+#[test]
+fn the_markdown_file_cannot_be_overwritten() {
+    let dir = temp_dir("protect-input");
+    let markdown_path = dir.join("readme.md");
+
+    fs::write(markdown_path.as_path(), "# Original Markdown").unwrap();
+
+    let status = Command::new(EXECUTABLE)
+        .arg(markdown_path.as_path())
+        .arg("-o")
+        .arg(markdown_path.as_path())
+        .arg("--force")
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+
+    assert!(!status.success());
+    assert_eq!("# Original Markdown", fs::read_to_string(markdown_path.as_path()).unwrap());
+}
+
+#[test]
 fn an_existing_html_file_is_only_overwritten_with_force() {
     let dir = temp_dir("force");
     let markdown_path = dir.join("readme.md");
@@ -94,4 +135,50 @@ fn local_images_can_be_embedded() {
 
     assert!(status.success());
     assert!(html.contains("src=\"data:image/png;base64,"));
+}
+
+#[test]
+fn stdin_images_can_be_embedded_from_the_base_path() {
+    let dir = temp_dir("stdin-base-path");
+
+    fs::write(dir.join("pic.png"), b"an image").unwrap();
+
+    let mut child = Command::new(EXECUTABLE)
+        .arg("-")
+        .arg("--embed-images")
+        .arg("--base-path")
+        .arg(dir.as_path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    child.stdin.take().unwrap().write_all(b"![a picture](pic.png)").unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let html = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(html.contains("src=\"data:image/png;base64,"));
+}
+
+#[test]
+fn local_images_with_queries_and_fragments_can_be_embedded() {
+    let dir = temp_dir("embed-image-url-parts");
+    let markdown_path = dir.join("readme.md");
+
+    fs::write(dir.join("pic.svg"), b"an image").unwrap();
+    fs::write(markdown_path.as_path(), "![a picture](pic.svg?rev=1#icon)").unwrap();
+
+    let output = Command::new(EXECUTABLE)
+        .arg(markdown_path.as_path())
+        .arg("-o")
+        .arg("-")
+        .arg("--embed-images")
+        .output()
+        .unwrap();
+    let html = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(html.contains("src=\"data:image/svg+xml;base64,YW4gaW1hZ2U=#icon\""));
 }

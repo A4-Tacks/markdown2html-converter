@@ -2,6 +2,7 @@ use std::{fs, path::Path, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use comrak::nodes::{Node, NodeCode, NodeValue};
+use serde::Deserialize;
 
 use crate::ConvertOptions;
 
@@ -111,24 +112,18 @@ pub(crate) fn used_assets(root: Node) -> UsedAssets {
     used_assets
 }
 
-/// Read the `title` entry out of a YAML front matter, without pulling in a YAML parser.
+/// Read the `title` entry out of a YAML front matter.
 fn front_matter_title(front_matter: &str) -> Option<String> {
-    for line in front_matter.lines() {
-        if let Some(value) = line.trim().strip_prefix("title:") {
-            let value = value.trim();
-            let value = value
-                .strip_prefix('"')
-                .and_then(|value| value.strip_suffix('"'))
-                .or_else(|| value.strip_prefix('\'').and_then(|value| value.strip_suffix('\'')))
-                .unwrap_or(value);
-
-            if !value.is_empty() {
-                return Some(value.to_string());
-            }
-        }
+    #[derive(Deserialize)]
+    struct FrontMatter {
+        title: Option<String>,
     }
 
-    None
+    let mut documents = serde_yaml::Deserializer::from_str(front_matter);
+    let title = FrontMatter::deserialize(documents.next()?).ok()?.title?;
+    let title = title.trim();
+
+    (!title.is_empty()).then(|| title.to_string())
 }
 
 /// Collect the plain text of a node and of all its descendants.
@@ -155,11 +150,20 @@ fn embed_image(base_path: &Path, url: &str) -> Option<String> {
         return None;
     }
 
-    let path = base_path.join(percent_decode(url).as_str());
+    let (path_url, fragment) =
+        url.split_once('#').map_or((url, None), |(path, fragment)| (path, Some(fragment)));
+    let path_url = path_url.split_once('?').map_or(path_url, |(path, _)| path);
+    let path = base_path.join(percent_decode(path_url).as_str());
     let mime = image_mime(path.extension()?.to_str()?)?;
     let image = fs::read(path).ok()?;
+    let mut data_url = format!("data:{mime};base64,{}", BASE64.encode(image));
 
-    Some(format!("data:{mime};base64,{}", BASE64.encode(image)))
+    if let Some(fragment) = fragment {
+        data_url.push('#');
+        data_url.push_str(fragment);
+    }
+
+    Some(data_url)
 }
 
 /// Check whether a URL starts with a scheme. A single letter is not treated as one, so that Windows drive letters still work.

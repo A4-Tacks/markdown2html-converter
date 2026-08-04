@@ -19,10 +19,27 @@ fn main() -> anyhow::Result<()> {
 
     let from_stdin = args.markdown_path.as_os_str() == STDIO_PATH;
 
-    let file_stem = if from_stdin {
+    if !from_stdin
+        && args
+            .markdown_path
+            .metadata()
+            .with_context(|| anyhow!("{:?}", args.markdown_path))?
+            .is_dir()
+    {
+        return Err(anyhow!("{:?} is a directory!", args.markdown_path));
+    }
+
+    let input_file_stem = if from_stdin {
         Cow::from("")
     } else {
         args.markdown_path.file_stem().map(|stem| stem.to_string_lossy()).unwrap_or_default()
+    };
+
+    let default_title = match args.output.as_deref() {
+        Some(path) if path.as_os_str() != STDIO_PATH => {
+            path.file_stem().map(|stem| stem.to_string_lossy()).unwrap_or_default()
+        },
+        _ => input_file_stem.clone(),
     };
 
     let html_path = match args.output.as_deref() {
@@ -32,11 +49,15 @@ fn main() -> anyhow::Result<()> {
         None => {
             let folder_path = args.markdown_path.parent().unwrap();
 
-            Some(Cow::from(folder_path.join(format!("{file_stem}.html"))))
+            Some(Cow::from(folder_path.join(format!("{input_file_stem}.html"))))
         },
     };
 
     if let Some(html_path) = html_path.as_deref() {
+        if !from_stdin && paths_resolve_to_same_file(args.markdown_path.as_path(), html_path)? {
+            return Err(anyhow!("the input and output paths refer to the same file"));
+        }
+
         match html_path.metadata() {
             Ok(metadata) => {
                 if metadata.is_dir() || !args.force {
@@ -55,15 +76,6 @@ fn main() -> anyhow::Result<()> {
 
         markdown
     } else {
-        if args
-            .markdown_path
-            .metadata()
-            .with_context(|| anyhow!("{:?}", args.markdown_path))?
-            .is_dir()
-        {
-            return Err(anyhow!("{:?} is a directory!", args.markdown_path));
-        }
-
         fs::read_to_string(args.markdown_path.as_path())
             .with_context(|| anyhow!("{:?}", args.markdown_path))?
     };
@@ -76,7 +88,7 @@ fn main() -> anyhow::Result<()> {
 
     let options = ConvertOptions {
         title:         args.title.as_deref(),
-        default_title: Some(file_stem.as_ref()),
+        default_title: Some(default_title.as_ref()),
         lang:          args.lang.as_str(),
         theme:         args.theme,
         allow_unsafe:  args.r#unsafe,
@@ -86,7 +98,11 @@ fn main() -> anyhow::Result<()> {
         cjk_fonts:     !args.no_cjk_fonts,
         minify:        !args.no_minify,
         embed_images:  args.embed_images,
-        base_path:     if from_stdin { None } else { args.markdown_path.parent() },
+        base_path:     args.base_path.as_deref().or(if from_stdin {
+            None
+        } else {
+            args.markdown_path.parent()
+        }),
         css:           css.as_deref(),
         extra_css:     extra_css.as_deref(),
         highlight_js:  highlight_js.as_deref(),
@@ -98,12 +114,32 @@ fn main() -> anyhow::Result<()> {
 
     match html_path {
         Some(html_path) => {
-            fs::write(html_path.as_ref(), html).with_context(|| anyhow!("{html_path:?}"))?
+            if args.force {
+                fs::write(html_path.as_ref(), html).with_context(|| anyhow!("{html_path:?}"))?;
+            } else {
+                let mut html_file = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(html_path.as_ref())
+                    .with_context(|| anyhow!("{html_path:?}"))?;
+
+                html_file.write_all(&html).with_context(|| anyhow!("{html_path:?}"))?;
+            }
         },
         None => io::stdout().write_all(&html).with_context(|| anyhow!("the standard output"))?,
     }
 
     Ok(())
+}
+
+fn paths_resolve_to_same_file(first: &Path, second: &Path) -> io::Result<bool> {
+    let first = fs::canonicalize(first)?;
+
+    match fs::canonicalize(second) {
+        Ok(second) => Ok(first == second),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn read_asset(path: Option<&Path>) -> anyhow::Result<Option<String>> {

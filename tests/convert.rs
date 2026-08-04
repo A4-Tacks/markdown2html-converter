@@ -30,6 +30,15 @@ fn title_comes_from_the_front_matter() {
 }
 
 #[test]
+fn a_folded_title_comes_from_the_front_matter() {
+    let markdown = "---\ntitle: >-\n  A title with\n  multiple lines\n---\n\n# Hello world!\n";
+
+    let html = convert_to_string(markdown, &ConvertOptions::default());
+
+    assert_eq!("A title with multiple lines", title_of(html.as_str()));
+}
+
+#[test]
 fn the_given_title_wins() {
     let options = ConvertOptions {
         title: Some("The given title"),

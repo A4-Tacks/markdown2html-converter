@@ -43,7 +43,7 @@ pub struct CLIArgs {
     pub output: Option<PathBuf>,
 
     #[arg(short, long)]
-    #[arg(help = "Force to output if the HTML file exists")]
+    #[arg(help = "Overwrite the HTML file if it exists")]
     pub force: bool,
 
     #[arg(short, long, default_value = "en")]
@@ -59,52 +59,57 @@ pub struct CLIArgs {
     pub r#unsafe: bool,
 
     #[arg(long)]
-    #[arg(help = "Embed local images as `data` URLs")]
+    #[arg(help = "Embed local images as data URLs")]
     pub embed_images: bool,
 
     #[arg(long)]
-    #[arg(help = "Not allow to use highlight.js")]
+    #[arg(value_hint = clap::ValueHint::DirPath)]
+    #[arg(help = "Specify the base directory for relative local images")]
+    pub base_path: Option<PathBuf>,
+
+    #[arg(long)]
+    #[arg(help = "Do not embed highlight.js")]
     pub no_highlight: bool,
 
     #[arg(long)]
-    #[arg(help = "Not allow to use MathJax")]
+    #[arg(help = "Do not embed MathJax")]
     pub no_math: bool,
 
     #[arg(long)]
-    #[arg(help = "Not allow to use CJK fonts")]
+    #[arg(help = "Do not embed CJK fonts")]
     pub no_cjk_fonts: bool,
 
     #[arg(long)]
-    #[arg(help = "Not treat a single line break as a line break")]
+    #[arg(help = "Do not render single line breaks as <br>")]
     pub no_hardbreaks: bool,
 
     #[arg(long)]
-    #[arg(help = "Not minify the output HTML")]
+    #[arg(help = "Do not minify the output HTML")]
     pub no_minify: bool,
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your custom CSS file")]
+    #[arg(help = "Specify a CSS file that replaces built-in Markdown styles")]
     pub css_path: Option<PathBuf>,
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of an extra CSS file to append")]
+    #[arg(help = "Specify an extra CSS file to append after all stylesheets")]
     pub extra_css_path: Option<PathBuf>,
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your custom highlight.js file")]
+    #[arg(help = "Specify a custom highlight.js file")]
     pub highlight_js_path: Option<PathBuf>,
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your custom CSS file for highlight.js code blocks")]
+    #[arg(help = "Specify custom CSS for highlight.js code blocks")]
     pub highlight_css_path: Option<PathBuf>,
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your custom single MathJax file")]
+    #[arg(help = "Specify a custom single-file MathJax bundle")]
     pub mathjax_js_path: Option<PathBuf>,
 }
 
