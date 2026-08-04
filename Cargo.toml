@@ -10,7 +10,7 @@ keywords = ["markdown", "html", "MathJax", "LaTeX", "highlight"]
 categories = ["command-line-utilities"]
 description = "A tool for converting a Markdown file to a single HTML file with built-in CSS and JS."
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE", "resources/*"]
+include = ["src/**/*", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE", "resources/*"]
 
 [profile.release]
 lto = true
