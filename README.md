@@ -61,7 +61,9 @@ When an output file is explicitly specified with `-o` (`--output`), its file nam
 
 Custom CSS and JavaScript are embedded in the generated HTML. Use only trusted files.
 
-`--base-path` controls how relative local image paths are resolved by `--embed-images`. It defaults to the Markdown file's directory and is required to choose another directory when reading Markdown from the standard input.
+`--base-path` controls how relative local image paths are resolved by `--embed-images`. It defaults to the Markdown file's directory and is required to choose another directory when reading Markdown from the standard input. It can only be used together with `--embed-images`.
+
+Only the image paths which are relative to the base path are embedded. Remote URLs, `data` URLs, and absolute paths such as `/pictures/pic.png` or `C:\pictures\pic.png` are left untouched.
 
 ## Dependency
 

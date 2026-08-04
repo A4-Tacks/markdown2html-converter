@@ -25,8 +25,10 @@ impl Output {
     }
 
     /// Append text which is already minified. It saves the minifier from scanning big assets again.
+    ///
+    /// The minifier holds the content of a `style` or a `script` element back until the closing tag, while this method writes straight to the output buffer. Mixing the two inside one element would therefore swap their order, so this method has to cover the whole content of an element.
     #[inline]
-    pub(crate) fn indigest<S: AsRef<[u8]>>(&mut self, text: S) {
+    fn indigest<S: AsRef<[u8]>>(&mut self, text: S) {
         match self {
             // `indigest` only appends bytes to the output buffer, so there is no safety contract to uphold here.
             Self::Minified(minifier) => unsafe { minifier.indigest(text) },
@@ -46,6 +48,32 @@ impl Output {
         self.digest("<script>")?;
         self.digest(js)?;
         self.digest("</script>")
+    }
+
+    /// Write a `<style>` element whose content is already minified.
+    #[inline]
+    pub(crate) fn minified_style<S: AsRef<[u8]>>(
+        &mut self,
+        css: S,
+    ) -> Result<(), HTMLMinifierError> {
+        self.digest("<style>")?;
+        self.indigest(css);
+        self.digest("</style>")
+    }
+
+    /// Write a `<style>` element out of several pieces which are all already minified.
+    #[inline]
+    pub(crate) fn minified_styles<S: AsRef<[u8]>>(
+        &mut self,
+        pieces: impl IntoIterator<Item = S>,
+    ) -> Result<(), HTMLMinifierError> {
+        self.digest("<style>")?;
+
+        for piece in pieces {
+            self.indigest(piece);
+        }
+
+        self.digest("</style>")
     }
 
     /// Write a `<script>` element whose content is already minified.

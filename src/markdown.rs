@@ -1,8 +1,8 @@
-use std::{fs, path::Path, sync::Arc};
+use std::{borrow::Cow, fs, path::Path, sync::Arc};
 
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use comrak::nodes::{Node, NodeCode, NodeValue};
-use serde::Deserialize;
+use yaml_rust2::YamlLoader;
 
 use crate::ConvertOptions;
 
@@ -47,7 +47,7 @@ pub(crate) fn build_comrak_options(options: &ConvertOptions) -> comrak::Options<
     }
 
     if options.embed_images {
-        let base_path = options.base_path.unwrap_or_else(|| Path::new("")).to_path_buf();
+        let base_path = options.base_path.unwrap_or(Path::new("")).to_path_buf();
 
         comrak_options.extension.image_url_rewriter =
             Some(Arc::new(move |url: &str| match embed_image(base_path.as_path(), url) {
@@ -74,7 +74,9 @@ pub(crate) fn document_title(root: Node) -> Option<String> {
                 let title = node_text(node);
 
                 if !title.is_empty() {
+                    // A front matter is always the first node, so nothing can override this title any more.
                     heading_title = Some(title);
+                    break;
                 }
             },
             _ => (),
@@ -114,14 +116,9 @@ pub(crate) fn used_assets(root: Node) -> UsedAssets {
 
 /// Read the `title` entry out of a YAML front matter.
 fn front_matter_title(front_matter: &str) -> Option<String> {
-    #[derive(Deserialize)]
-    struct FrontMatter {
-        title: Option<String>,
-    }
-
-    let mut documents = serde_yaml::Deserializer::from_str(front_matter);
-    let title = FrontMatter::deserialize(documents.next()?).ok()?.title?;
-    let title = title.trim();
+    // The front matter still carries its `---` delimiters, so the title is in the first document.
+    let documents = YamlLoader::load_from_str(front_matter).ok()?;
+    let title = documents.first()?["title"].as_str()?.trim();
 
     (!title.is_empty()).then(|| title.to_string())
 }
@@ -144,19 +141,34 @@ fn node_text(node: Node) -> String {
     text.trim().to_string()
 }
 
-/// Turn a local image into a `data` URL. Remote and absolute URLs are left alone.
+/// Turn a local image into a `data` URL. Only the paths which are relative to the base path are embedded.
 fn embed_image(base_path: &Path, url: &str) -> Option<String> {
-    if url.is_empty() || url.starts_with('#') || url.starts_with("//") || has_scheme(url) {
+    if url.is_empty() || url.starts_with(['#', '/', '\\']) || has_scheme(url) {
         return None;
     }
 
     let (path_url, fragment) =
         url.split_once('#').map_or((url, None), |(path, fragment)| (path, Some(fragment)));
     let path_url = path_url.split_once('?').map_or(path_url, |(path, _)| path);
-    let path = base_path.join(percent_decode(path_url).as_str());
+    let relative_path = percent_decode(path_url);
+    let relative_path = Path::new(relative_path.as_ref());
+
+    // A Markdown file should not be able to pull in a file from anywhere on the disk.
+    if relative_path.is_absolute() {
+        return None;
+    }
+
+    let path = base_path.join(relative_path);
     let mime = image_mime(path.extension()?.to_str()?)?;
     let image = fs::read(path).ok()?;
-    let mut data_url = format!("data:{mime};base64,{}", BASE64.encode(image));
+
+    let mut data_url = String::with_capacity(mime.len() + 13 + image.len().div_ceil(3) * 4);
+
+    data_url.push_str("data:");
+    data_url.push_str(mime);
+    data_url.push_str(";base64,");
+
+    BASE64.encode_string(image, &mut data_url);
 
     if let Some(fragment) = fragment {
         data_url.push('#');
@@ -166,7 +178,7 @@ fn embed_image(base_path: &Path, url: &str) -> Option<String> {
     Some(data_url)
 }
 
-/// Check whether a URL starts with a scheme. A single letter is not treated as one, so that Windows drive letters still work.
+/// Check whether a URL starts with a scheme. A single letter is not treated as one, so that a Windows drive letter is left to the absolute path check.
 fn has_scheme(url: &str) -> bool {
     match url.find(':') {
         Some(index) => {
@@ -180,20 +192,29 @@ fn has_scheme(url: &str) -> bool {
     }
 }
 
-fn percent_decode(url: &str) -> String {
+/// Decode the percent-encoded octets of a URL. A URL which has nothing to decode is borrowed as-is.
+fn percent_decode(url: &str) -> Cow<'_, str> {
     let bytes = url.as_bytes();
+
+    // `%` is ASCII, so this byte index never falls inside a multi-byte character.
+    let Some(start) = url.find('%') else {
+        return Cow::Borrowed(url);
+    };
+
     let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
+    let mut index = start;
+
+    decoded.extend_from_slice(&bytes[..start]);
 
     while index < bytes.len() {
         match bytes[index] {
             b'%' if index + 2 < bytes.len() => {
-                match u8::from_str_radix(&url[(index + 1)..(index + 3)], 16) {
-                    Ok(byte) => {
+                match hex_octet(bytes[index + 1], bytes[index + 2]) {
+                    Some(byte) => {
                         decoded.push(byte);
                         index += 3;
                     },
-                    Err(_) => {
+                    None => {
                         decoded.push(b'%');
                         index += 1;
                     },
@@ -206,21 +227,97 @@ fn percent_decode(url: &str) -> String {
         }
     }
 
-    String::from_utf8(decoded).unwrap_or_else(|_| url.to_string())
+    match String::from_utf8(decoded) {
+        Ok(decoded) => Cow::Owned(decoded),
+        Err(_) => Cow::Borrowed(url),
+    }
+}
+
+/// Decode a pair of hexadecimal digits into a byte.
+fn hex_octet(high: u8, low: u8) -> Option<u8> {
+    Some((hex_digit(high)? << 4) | hex_digit(low)?)
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn image_mime(extension: &str) -> Option<&'static str> {
-    let mime = match extension.to_ascii_lowercase().as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "svg" => "image/svg+xml",
-        "webp" => "image/webp",
-        "avif" => "image/avif",
-        "bmp" => "image/bmp",
-        "ico" => "image/x-icon",
-        _ => return None,
-    };
+    const MIMES: [(&str, &str); 9] = [
+        ("png", "image/png"),
+        ("jpg", "image/jpeg"),
+        ("jpeg", "image/jpeg"),
+        ("gif", "image/gif"),
+        ("svg", "image/svg+xml"),
+        ("webp", "image/webp"),
+        ("avif", "image/avif"),
+        ("bmp", "image/bmp"),
+        ("ico", "image/x-icon"),
+    ];
 
-    Some(mime)
+    MIMES.into_iter().find(|(name, _)| extension.eq_ignore_ascii_case(name)).map(|(_, mime)| mime)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use super::*;
+
+    #[test]
+    fn a_url_without_percent_encoding_is_borrowed() {
+        assert_eq!("images/pic.png", percent_decode("images/pic.png"));
+        assert!(matches!(percent_decode("images/pic.png"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn percent_encoded_octets_are_decoded() {
+        assert_eq!("a b.png", percent_decode("a%20b.png"));
+        assert_eq!("a/b.png", percent_decode("a%2Fb.png"));
+        assert_eq!("圖.png", percent_decode("%E5%9C%96.png"));
+    }
+
+    #[test]
+    fn a_percent_which_is_not_an_escape_is_kept() {
+        // A `%` followed by a non-ASCII character used to be sliced at a byte which is not a character boundary.
+        assert_eq!("%圖.png", percent_decode("%圖.png"));
+        assert_eq!("%zz.png", percent_decode("%zz.png"));
+        // `from_str_radix` used to accept a sign, which made this an escape.
+        assert_eq!("%+A.png", percent_decode("%+A.png"));
+        assert_eq!("100%", percent_decode("100%"));
+        assert_eq!("100%2", percent_decode("100%2"));
+    }
+
+    #[test]
+    fn only_real_schemes_are_detected() {
+        assert!(has_scheme("https://magiclen.org/pic.png"));
+        assert!(has_scheme("data:image/png;base64,AAAA"));
+        assert!(has_scheme("mailto:len@magiclen.org"));
+        assert!(!has_scheme("images/pic.png"));
+        assert!(!has_scheme("C:/images/pic.png"));
+    }
+
+    #[test]
+    fn only_relative_images_are_embedded() {
+        let dir = env::temp_dir().join("markdown2html-converter-unit-embed-image");
+        let path = dir.join("pic.png");
+
+        fs::create_dir_all(dir.as_path()).unwrap();
+        fs::write(path.as_path(), b"an image").unwrap();
+
+        assert_eq!(
+            Some(String::from("data:image/png;base64,YW4gaW1hZ2U=")),
+            embed_image(dir.as_path(), "pic.png")
+        );
+        // The file is there, but it may only be reached relatively to the base path.
+        assert_eq!(None, embed_image(dir.as_path(), path.to_str().unwrap()));
+        assert_eq!(None, embed_image(dir.as_path(), "https://magiclen.org/pic.png"));
+        assert_eq!(None, embed_image(dir.as_path(), "//magiclen.org/pic.png"));
+        assert_eq!(None, embed_image(dir.as_path(), "#anchor"));
+    }
 }

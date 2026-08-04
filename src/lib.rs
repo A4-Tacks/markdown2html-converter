@@ -66,7 +66,7 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
     let has_code = options.highlight && used_assets.highlight;
     let has_math = options.math && used_assets.math;
 
-    let mut markdown_html = String::new();
+    let mut markdown_html = String::with_capacity(markdown.len() * 3 / 2);
 
     // Writing into a `String` never fails.
     format_html(root, &comrak_options, &mut markdown_html).unwrap();
@@ -83,7 +83,7 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
          shrink-to-fit=no\">",
     )?;
     output.digest(format!(
-        "<meta name=\"generator\" content=\"{APP_NAME} {CARGO_PKG_VERSION} by magiclen.org\"/>"
+        "<meta name=\"generator\" content=\"{APP_NAME} {CARGO_PKG_VERSION} by magiclen.org\">"
     ))?;
     output.digest("<title>")?;
     output.digest(html_escape::encode_text(title.as_ref()).as_ref())?;
@@ -115,17 +115,15 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
         match options.highlight_css {
             Some(css) => output.style(html_escape::encode_style(css).as_ref())?,
             None => match options.theme {
-                Theme::Auto => {
-                    output.digest("<style>")?;
-                    output.digest("@media (prefers-color-scheme: light) {")?;
-                    output.digest(HIGHLIGHT_CSS_LIGHT)?;
-                    output.digest("}@media (prefers-color-scheme: dark) {")?;
-                    output.digest(HIGHLIGHT_CSS_DARK)?;
-                    output.digest("}")?;
-                    output.digest("</style>")?;
-                },
-                Theme::Light => output.style(HIGHLIGHT_CSS_LIGHT)?,
-                Theme::Dark => output.style(HIGHLIGHT_CSS_DARK)?,
+                Theme::Auto => output.minified_styles([
+                    "@media (prefers-color-scheme:light){",
+                    HIGHLIGHT_CSS_LIGHT,
+                    "}@media (prefers-color-scheme:dark){",
+                    HIGHLIGHT_CSS_DARK,
+                    "}",
+                ])?,
+                Theme::Light => output.minified_style(HIGHLIGHT_CSS_LIGHT)?,
+                Theme::Dark => output.minified_style(HIGHLIGHT_CSS_DARK)?,
             },
         }
 

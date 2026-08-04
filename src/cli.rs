@@ -62,7 +62,7 @@ pub struct CLIArgs {
     #[arg(help = "Embed local images as data URLs")]
     pub embed_images: bool,
 
-    #[arg(long)]
+    #[arg(long, requires = "embed_images")]
     #[arg(value_hint = clap::ValueHint::DirPath)]
     #[arg(help = "Specify the base directory for relative local images")]
     pub base_path: Option<PathBuf>,

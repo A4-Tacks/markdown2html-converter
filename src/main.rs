@@ -114,17 +114,20 @@ fn main() -> anyhow::Result<()> {
 
     match html_path {
         Some(html_path) => {
-            if args.force {
-                fs::write(html_path.as_ref(), html).with_context(|| anyhow!("{html_path:?}"))?;
-            } else {
-                let mut html_file = fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(html_path.as_ref())
-                    .with_context(|| anyhow!("{html_path:?}"))?;
+            let mut open_options = fs::OpenOptions::new();
 
-                html_file.write_all(&html).with_context(|| anyhow!("{html_path:?}"))?;
+            open_options.write(true);
+
+            if args.force {
+                open_options.create(true).truncate(true);
+            } else {
+                open_options.create_new(true);
             }
+
+            let mut html_file =
+                open_options.open(html_path.as_ref()).with_context(|| anyhow!("{html_path:?}"))?;
+
+            html_file.write_all(&html).with_context(|| anyhow!("{html_path:?}"))?;
         },
         None => io::stdout().write_all(&html).with_context(|| anyhow!("the standard output"))?,
     }

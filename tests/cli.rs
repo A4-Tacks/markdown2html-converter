@@ -163,6 +163,27 @@ fn stdin_images_can_be_embedded_from_the_base_path() {
 }
 
 #[test]
+fn a_local_image_with_a_percent_encoded_name_can_be_embedded() {
+    let dir = temp_dir("embed-image-percent-encoded");
+    let markdown_path = dir.join("readme.md");
+
+    fs::write(dir.join("圖.png"), b"an image").unwrap();
+    fs::write(markdown_path.as_path(), "![a picture](%E5%9C%96.png)").unwrap();
+
+    let output = Command::new(EXECUTABLE)
+        .arg(markdown_path.as_path())
+        .arg("-o")
+        .arg("-")
+        .arg("--embed-images")
+        .output()
+        .unwrap();
+    let html = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(html.contains("src=\"data:image/png;base64,YW4gaW1hZ2U=\""));
+}
+
+#[test]
 fn local_images_with_queries_and_fragments_can_be_embedded() {
     let dir = temp_dir("embed-image-url-parts");
     let markdown_path = dir.join("readme.md");
