@@ -1,6 +1,6 @@
 [package]
 name = "markdown2html-converter"
-version = "1.1.12"
+version = "2.0.0"
 authors = ["Magic Len <len@magiclen.org>"]
 edition = "2024"
 rust-version = "1.89"
@@ -25,7 +25,7 @@ terminal_size = "0.4"
 
 anyhow = "1"
 
-lazy-static-include = "4"
-html-minifier = "5"
-comrak = { version = "0.19", default-features = false }
+html-minifier = "5.0.1"
+comrak = { version = "0.54", default-features = false }
 html-escape = "0.2"
+base64 = "0.23"

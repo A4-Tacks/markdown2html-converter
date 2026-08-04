@@ -1,21 +1,24 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use clap::{CommandFactory, FromArgMatches, Parser};
 use concat_with::concat_line;
+use markdown2html_converter::{APP_NAME, CARGO_PKG_VERSION, Theme};
 use terminal_size::terminal_size;
 
-pub const APP_NAME: &str = "Markdown to HTML Converter";
-pub const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
 
 const AFTER_HELP: &str = "Enjoy it! https://magiclen.org";
 
 const APP_ABOUT: &str = concat!(
-    "A simple tool for converting Simple Chinese to Traditional Chinese(TW).\n\nEXAMPLES:\n",
+    "A tool for converting a Markdown file to a single HTML file with built-in CSS and \
+     JS.\n\nEXAMPLES:\n",
     concat_line!(prefix "markdown2html-converter ",
         "/path/to/file.md                           # Convert /path/to/file.md to /path/to/file.html, titled \"file\"",
         "/path/to/file.md -o /path/to/output.html   # Convert /path/to/file.md to /path/to/output.html, titled \"output\"",
         "/path/to/file.md -t 'Hello World!'         # Convert /path/to/file.md to /path/to/file.html, titled \"Hello World!\"",
+        "/path/to/file.md --theme dark              # Convert /path/to/file.md to /path/to/file.html, always in the dark theme",
+        "/path/to/file.md -o - > /path/to/out.html  # Convert /path/to/file.md and write the HTML to the standard output",
+        "- -o /path/to/output.html                  # Convert the Markdown from the standard input to /path/to/output.html",
     )
 );
 
@@ -26,42 +29,68 @@ const APP_ABOUT: &str = concat!(
 #[command(author = CARGO_PKG_AUTHORS)]
 #[command(after_help = AFTER_HELP)]
 pub struct CLIArgs {
+    #[arg(value_hint = clap::ValueHint::FilePath)]
+    #[arg(help = "Specify the path of your Markdown file, or `-` for the standard input")]
+    pub markdown_path: PathBuf,
+
     #[arg(short, long)]
     #[arg(help = "Specify the title of your HTML file")]
     pub title: Option<String>,
 
-    #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your Markdown file")]
-    pub markdown_path: PathBuf,
-
     #[arg(short = 'o', long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your HTML file")]
-    pub html_path: Option<PathBuf>,
+    #[arg(help = "Specify the path of your HTML file, or `-` for the standard output")]
+    pub output: Option<PathBuf>,
 
     #[arg(short, long)]
     #[arg(help = "Force to output if the HTML file exists")]
     pub force: bool,
 
+    #[arg(short, long, default_value = "en")]
+    #[arg(help = "Specify the language of your HTML file")]
+    pub lang: String,
+
+    #[arg(long, default_value = "auto", value_parser = parse_theme)]
+    #[arg(help = "Specify the color theme of your HTML file [possible values: auto, light, dark]")]
+    pub theme: Theme,
+
     #[arg(long)]
     #[arg(help = "Allow raw HTML and dangerous URLs")]
-    pub no_safe: bool,
+    pub r#unsafe: bool,
+
+    #[arg(long)]
+    #[arg(help = "Embed local images as `data` URLs")]
+    pub embed_images: bool,
 
     #[arg(long)]
     #[arg(help = "Not allow to use highlight.js")]
     pub no_highlight: bool,
 
     #[arg(long)]
-    #[arg(help = "Not allow to use mathjax.js")]
-    pub no_mathjax: bool,
+    #[arg(help = "Not allow to use MathJax")]
+    pub no_math: bool,
 
     #[arg(long)]
     #[arg(help = "Not allow to use CJK fonts")]
     pub no_cjk_fonts: bool,
 
     #[arg(long)]
+    #[arg(help = "Not treat a single line break as a line break")]
+    pub no_hardbreaks: bool,
+
+    #[arg(long)]
+    #[arg(help = "Not minify the output HTML")]
+    pub no_minify: bool,
+
+    #[arg(long)]
+    #[arg(value_hint = clap::ValueHint::FilePath)]
     #[arg(help = "Specify the path of your custom CSS file")]
     pub css_path: Option<PathBuf>,
+
+    #[arg(long)]
+    #[arg(value_hint = clap::ValueHint::FilePath)]
+    #[arg(help = "Specify the path of an extra CSS file to append")]
+    pub extra_css_path: Option<PathBuf>,
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
@@ -75,8 +104,12 @@ pub struct CLIArgs {
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify the path of your custom single MATH_JAX.js file")]
+    #[arg(help = "Specify the path of your custom single MathJax file")]
     pub mathjax_js_path: Option<PathBuf>,
+}
+
+fn parse_theme(theme: &str) -> Result<Theme, String> {
+    Theme::from_str(theme).map_err(|error| error.to_string())
 }
 
 pub fn get_args() -> CLIArgs {

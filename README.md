@@ -12,33 +12,51 @@ EXAMPLES:
 markdown2html-converter /path/to/file.md                           # Convert /path/to/file.md to /path/to/file.html, titled "file"
 markdown2html-converter /path/to/file.md -o /path/to/output.html   # Convert /path/to/file.md to /path/to/output.html, titled "output"
 markdown2html-converter /path/to/file.md -t 'Hello World!'         # Convert /path/to/file.md to /path/to/file.html, titled "Hello World!"
+markdown2html-converter /path/to/file.md --theme dark              # Convert /path/to/file.md to /path/to/file.html, always in the dark theme
+markdown2html-converter /path/to/file.md -o - > /path/to/out.html  # Convert /path/to/file.md and write the HTML to the standard output
+markdown2html-converter - -o /path/to/output.html                  # Convert the Markdown from the standard input to /path/to/output.html
 
 Usage: markdown2html-converter [OPTIONS] <MARKDOWN_PATH>
 
 Arguments:
-  <MARKDOWN_PATH>  Specify the path of your Markdown file
+  <MARKDOWN_PATH>  Specify the path of your Markdown file, or `-` for the standard input
 
 Options:
   -t, --title <TITLE>                            Specify the title of your HTML file
-  -o, --html-path <HTML_PATH>                    Specify the path of your HTML file
+  -o, --output <OUTPUT>                          Specify the path of your HTML file, or `-` for the standard output
   -f, --force                                    Force to output if the HTML file exists
-      --no-safe                                  Allow raw HTML and dangerous URLs
+  -l, --lang <LANG>                              Specify the language of your HTML file [default: en]
+      --theme <THEME>                            Specify the color theme of your HTML file [possible values: auto, light, dark] [default: auto]
+      --unsafe                                   Allow raw HTML and dangerous URLs
+      --embed-images                             Embed local images as `data` URLs
       --no-highlight                             Not allow to use highlight.js
-      --no-mathjax                               Not allow to use mathjax.js
+      --no-math                                  Not allow to use MathJax
       --no-cjk-fonts                             Not allow to use CJK fonts
+      --no-hardbreaks                            Not treat a single line break as a line break
+      --no-minify                                Not minify the output HTML
       --css-path <CSS_PATH>                      Specify the path of your custom CSS file
+      --extra-css-path <EXTRA_CSS_PATH>          Specify the path of an extra CSS file to append
       --highlight-js-path <HIGHLIGHT_JS_PATH>    Specify the path of your custom highlight.js file
       --highlight-css-path <HIGHLIGHT_CSS_PATH>  Specify the path of your custom CSS file for highlight.js code blocks
-      --mathjax-js-path <MATHJAX_JS_PATH>        Specify the path of your custom single MATH_JAX.js file
+      --mathjax-js-path <MATHJAX_JS_PATH>        Specify the path of your custom single MathJax file
   -h, --help                                     Print help
   -V, --version                                  Print version
 ```
 
+## Title
+
+The title of the output HTML file is looked up in this order.
+
+1. The `-t` (`--title`) option.
+2. The `title` entry of the YAML front matter of the Markdown file.
+3. The first level-1 heading of the Markdown file.
+4. The file name of the Markdown file.
+
 ## Dependency
 
-Markdown is converted to HTML by the [comrak](https://crates.io/crates/comrak) crate. The default stylesheet (the CSS file) is from [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css). 
+Markdown is converted to HTML by the [comrak](https://crates.io/crates/comrak) crate, with the GFM extensions (tables, task lists, footnotes, autolinks, strikethrough, [alerts](https://github.com/orgs/community/discussions/16925)) enabled. The default stylesheet (the CSS file) is from [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css).
 
-If ` ``` ` is used in the input Markdown file, the [highlight.js](https://highlightjs.org/) will be automatically embedded in the output HTML file. The preset supported languages are listed below.
+If ` ``` ` is used with a language in the input Markdown file, the [highlight.js](https://highlightjs.org/) will be automatically embedded in the output HTML file. The preset supported languages are listed below.
 
 * Apache
 * Bash
@@ -49,6 +67,7 @@ If ` ``` ` is used in the input Markdown file, the [highlight.js](https://highli
 * Diff
 * Dockerfile
 * Go
+* GraphQL
 * HTML, XML
 * JSON
 * Java
@@ -63,6 +82,7 @@ If ` ``` ` is used in the input Markdown file, the [highlight.js](https://highli
 * PHP
 * PHP Template
 * Perl
+* Plain Text
 * Python
 * Python REPL
 * R
@@ -75,9 +95,38 @@ If ` ``` ` is used in the input Markdown file, the [highlight.js](https://highli
 * TOML, INI
 * TypeScript
 * Visual Basic .NET
+* WebAssembly
 * YAML
 
-If `#{{` - `}}#` or `#{{{` - `}}}#` is used in the input Markdown file, the [mathjax.js](https://www.mathjax.org/) will be automatically embedded in the output HTML file. `#{{` and `}}#` are `inlineMath` delimiters. `#{{{` and `}}}#` are `displayMath` delimiters. The default **mathjax.js** are using the [tex-mml-chtml](http://docs.mathjax.org/en/latest/web/components/combined.html#tex-mml-chtml) configuration file.
+If math is used in the input Markdown file, the [MathJax](https://www.mathjax.org/) will be automatically embedded in the output HTML file. The supported syntaxes are listed below.
+
+| Syntax | Result |
+| --- | --- |
+| `$E = mc^2$` | inline math |
+| `$$x = y$$` | display math |
+| `\(a + b\)` | inline math |
+| `\[a + b\]` | display math |
+| ` ```math ` block | display math |
+
+The default **MathJax** is the [tex-mml-svg](https://docs.mathjax.org/en/latest/web/components/combined.html#tex-mml-svg) configuration file. It draws math with inline SVG paths, so the output HTML file needs no web font and works offline.
+
+## Themes
+
+By default, the output HTML file follows the `prefers-color-scheme` media feature. Use `--theme light` or `--theme dark` to always use one of them.
+
+## Offline Usage
+
+Everything but the CJK fonts is embedded in the output HTML file. Add `--no-cjk-fonts` to make the output HTML file completely self-contained, and `--embed-images` to inline the local images it refers to.
+
+## Library
+
+This crate can also be used as a library.
+
+```rust
+use markdown2html_converter::ConvertOptions;
+
+let html = markdown2html_converter::convert("# Hello world!", &ConvertOptions::default()).unwrap();
+```
 
 ## A Markdown Example
 

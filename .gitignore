@@ -134,6 +134,8 @@ tags
 # Local History for Visual Studio Code
 .history/
 
+example.html
+
 # Built Visual Studio Code Extensions
 *.vsix
 

@@ -1,6 +1,3 @@
-document.querySelectorAll('code[class^="language-"]').forEach(function(element) {
-    var c = element.getAttribute('class');
-    element.setAttribute('class', c.replace(/language-/g, ''));
-
+document.querySelectorAll('pre code[class^="language-"]:not(.language-math)').forEach(function (element) {
     hljs.highlightElement(element);
 });

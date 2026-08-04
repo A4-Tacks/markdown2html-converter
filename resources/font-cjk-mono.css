@@ -10,3 +10,11 @@
     src: local("NotoSansMonoCJKTC-Bold"), local("SourceHanSansHWTC-Bold"), local("SourceHanSansHWTW-Bold"), local("NotoSansMonoCJKJP-Bold"), local("NotoSansMonoCJKKR-Bold"), local("NotoSansMonoCJKHK-Bold"), local("NotoSansMonoCJKSC-Bold"), url("https://cdn.jsdelivr.net/gh/magiclen/source-han-sans-hw-tc-woff2@2.005/SourceHanSansHWTC-Bold.woff2") format("woff2");
     font-display: swap
 }
+
+.markdown-body tt,
+.markdown-body code,
+.markdown-body kbd,
+.markdown-body pre,
+.markdown-body samp {
+    font-family: 'CJK MONO', "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", monospace
+}
