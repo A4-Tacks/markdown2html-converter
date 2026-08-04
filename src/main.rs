@@ -2,9 +2,9 @@ mod cli;
 
 use std::{borrow::Cow, fs, io};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use cli::*;
-use comrak::{markdown_to_html, ComrakOptions};
+use comrak::{ComrakOptions, markdown_to_html};
 use html_minifier::HTMLMinifier;
 use lazy_static_include::lazy_static_include_str;
 
@@ -133,21 +133,10 @@ fn main() -> anyhow::Result<()> {
     }
     html_minifier.digest("</style>").unwrap();
 
-    let has_code = {
-        if args.no_highlight {
-            false
-        } else {
-            markdown_html.contains("</code></pre>")
-        }
-    };
+    let has_code =
+        { if args.no_highlight { false } else { markdown_html.contains("</code></pre>") } };
 
-    let has_mathjax = {
-        if args.no_mathjax {
-            false
-        } else {
-            markdown_html.contains("#{{")
-        }
-    };
+    let has_mathjax = { if args.no_mathjax { false } else { markdown_html.contains("#{{") } };
 
     if !args.no_cjk_fonts {
         html_minifier.digest("<style>").unwrap();
