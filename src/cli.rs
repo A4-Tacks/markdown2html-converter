@@ -1,8 +1,8 @@
 use std::{path::PathBuf, str::FromStr};
 
-use clap::{CommandFactory, FromArgMatches, Parser};
+use clap::{CommandFactory, FromArgMatches, Parser, error::ErrorKind};
 use concat_with::concat_line;
-use markdown2html_converter::{APP_NAME, CARGO_PKG_VERSION, Theme};
+use markdown2html_converter::{APP_NAME, CARGO_PKG_VERSION, MathMode, Theme};
 use terminal_size::terminal_size;
 
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -71,8 +71,20 @@ pub struct CLIArgs {
     #[arg(help = "Do not embed highlight.js")]
     pub no_highlight: bool,
 
-    #[arg(long)]
-    #[arg(help = "Do not embed MathJax")]
+    #[arg(long, value_delimiter = ',', conflicts_with = "no_highlight")]
+    #[arg(value_name = "LANGUAGES")]
+    #[arg(help = "Specify which code block languages make highlight.js be embedded, separated \
+                  by commas, or `any` for all of them [default: the languages of the built-in \
+                  highlight.js]")]
+    pub highlight_languages: Option<Vec<String>>,
+
+    #[arg(long, default_value_t = MathMode::default(), value_parser = parse_math_mode)]
+    #[arg(help = "Specify how the math is rendered [possible values: mathjax-embedded, \
+                  mathjax-client, katex-embedded, katex-client]")]
+    pub math_mode: MathMode,
+
+    #[arg(long, conflicts_with = "math_mode")]
+    #[arg(help = "Do not render math")]
     pub no_math: bool,
 
     #[arg(long)]
@@ -99,7 +111,8 @@ pub struct CLIArgs {
 
     #[arg(long)]
     #[arg(value_hint = clap::ValueHint::FilePath)]
-    #[arg(help = "Specify a custom highlight.js file")]
+    #[arg(help = "Specify a custom highlight.js file. Pass --highlight-languages too when it \
+                  supports other languages than the built-in one")]
     pub highlight_js_path: Option<PathBuf>,
 
     #[arg(long)]
@@ -111,10 +124,24 @@ pub struct CLIArgs {
     #[arg(value_hint = clap::ValueHint::FilePath)]
     #[arg(help = "Specify a custom single-file MathJax bundle")]
     pub mathjax_js_path: Option<PathBuf>,
+
+    #[arg(long)]
+    #[arg(value_hint = clap::ValueHint::FilePath)]
+    #[arg(help = "Specify a custom KaTeX file")]
+    pub katex_js_path: Option<PathBuf>,
+
+    #[arg(long)]
+    #[arg(value_hint = clap::ValueHint::FilePath)]
+    #[arg(help = "Specify custom CSS for KaTeX")]
+    pub katex_css_path: Option<PathBuf>,
 }
 
 fn parse_theme(theme: &str) -> Result<Theme, String> {
     Theme::from_str(theme).map_err(|error| error.to_string())
+}
+
+fn parse_math_mode(math_mode: &str) -> Result<MathMode, String> {
+    MathMode::from_str(math_mode).map_err(|error| error.to_string())
 }
 
 pub fn get_args() -> CLIArgs {
@@ -126,10 +153,39 @@ pub fn get_args() -> CLIArgs {
 
     let matches = args.get_matches();
 
-    match CLIArgs::from_arg_matches(&matches) {
+    let args = match CLIArgs::from_arg_matches(&matches) {
         Ok(args) => args,
         Err(err) => {
             err.exit();
         },
+    };
+
+    // clap can require an argument to be present, but not to have a certain value, so the assets which fit only one math mode are checked here.
+    if let Some((option, math_mode)) = misplaced_math_asset(&args) {
+        CLIArgs::command()
+            .error(
+                ErrorKind::ArgumentConflict,
+                format!("the argument '{option}' can only be used with '--math-mode {math_mode}'"),
+            )
+            .exit();
     }
+
+    args
+}
+
+/// Find an asset option which needs a math mode other than the chosen one.
+fn misplaced_math_asset(args: &CLIArgs) -> Option<(&'static str, MathMode)> {
+    if args.mathjax_js_path.is_some() && args.math_mode != MathMode::MathJaxEmbedded {
+        return Some(("--mathjax-js-path", MathMode::MathJaxEmbedded));
+    }
+
+    if args.katex_js_path.is_some() && args.math_mode != MathMode::KatexEmbedded {
+        return Some(("--katex-js-path", MathMode::KatexEmbedded));
+    }
+
+    if args.katex_css_path.is_some() && args.math_mode != MathMode::KatexEmbedded {
+        return Some(("--katex-css-path", MathMode::KatexEmbedded));
+    }
+
+    None
 }

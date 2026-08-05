@@ -2,7 +2,7 @@ use std::{
     env, fs,
     io::Write,
     path::PathBuf,
-    process::{Command, Stdio},
+    process::{Command, Output, Stdio},
 };
 
 const EXECUTABLE: &str = env!("CARGO_BIN_EXE_markdown2html-converter");
@@ -14,6 +14,21 @@ fn temp_dir(name: &str) -> PathBuf {
     fs::create_dir_all(path.as_path()).unwrap();
 
     path
+}
+
+fn convert_stdin(markdown: &str, args: &[&str]) -> Output {
+    let mut child = Command::new(EXECUTABLE)
+        .arg("-")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    child.stdin.take().unwrap().write_all(markdown.as_bytes()).unwrap();
+
+    child.wait_with_output().unwrap()
 }
 
 #[test]
@@ -112,6 +127,41 @@ fn an_existing_html_file_is_only_overwritten_with_force() {
 
     assert!(status.success());
     assert!(fs::read_to_string(html_path.as_path()).unwrap().contains("<!DOCTYPE html>"));
+}
+
+#[test]
+fn the_math_mode_can_be_chosen_on_the_command_line() {
+    let output = convert_stdin("$E = mc^2$", &["--math-mode", "mathjax-embedded"]);
+    let html = String::from_utf8(output.stdout).unwrap();
+
+    assert!(output.status.success());
+    assert!(html.contains("MathJax"));
+    assert!(!html.contains("npm/katex"));
+}
+
+#[test]
+fn the_math_mode_conflicts_with_no_math() {
+    let output = convert_stdin("$E = mc^2$", &["--no-math", "--math-mode", "katex-client"]);
+
+    assert!(!output.status.success());
+}
+
+#[test]
+fn a_math_asset_needs_the_math_mode_it_belongs_to() {
+    let output = convert_stdin("$E = mc^2$", &["--mathjax-js-path", "/dev/null"]);
+
+    assert!(!output.status.success());
+}
+
+#[test]
+fn the_highlight_languages_can_be_chosen_on_the_command_line() {
+    let markdown = "```mermaid\ngraph TD;\n```\n";
+
+    let by_default = convert_stdin(markdown, &[]);
+    let chosen = convert_stdin(markdown, &["--highlight-languages", "mermaid"]);
+
+    assert!(!String::from_utf8(by_default.stdout).unwrap().contains("hljs"));
+    assert!(String::from_utf8(chosen.stdout).unwrap().contains("hljs"));
 }
 
 #[test]

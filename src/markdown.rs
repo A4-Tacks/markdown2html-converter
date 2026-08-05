@@ -4,7 +4,7 @@ use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use comrak::nodes::{Node, NodeCode, NodeValue};
 use yaml_rust2::YamlLoader;
 
-use crate::ConvertOptions;
+use crate::{ConvertOptions, HighlightLanguages, resources::HIGHLIGHT_LANGUAGES};
 
 /// Which optional assets a document needs.
 #[derive(Debug, Clone, Copy, Default)]
@@ -39,8 +39,8 @@ pub(crate) fn build_comrak_options(options: &ConvertOptions) -> comrak::Options<
 
     comrak_options.parse.relaxed_tasklist_matching = true;
 
-    // Without MathJax the math would be shown as raw TeX, so the delimiters are better left alone.
-    if options.math {
+    // Without a renderer the math would be shown as raw TeX, so the delimiters are better left alone.
+    if options.math.is_some() {
         comrak_options.extension.math_code = true;
         comrak_options.extension.math_dollars = true;
         comrak_options.extension.math_latex = true;
@@ -87,7 +87,7 @@ pub(crate) fn document_title(root: Node) -> Option<String> {
 }
 
 /// Check which optional assets a document needs.
-pub(crate) fn used_assets(root: Node) -> UsedAssets {
+pub(crate) fn used_assets(root: Node, languages: HighlightLanguages) -> UsedAssets {
     let mut used_assets = UsedAssets::default();
 
     for node in root.descendants() {
@@ -97,8 +97,8 @@ pub(crate) fn used_assets(root: Node) -> UsedAssets {
 
                 if lang == "math" {
                     used_assets.math = true;
-                } else if !lang.is_empty() {
-                    // Code blocks without a language are not touched by highlight.js.
+                } else if is_highlighted(languages, lang) {
+                    // Code blocks without a language, or with one highlight.js cannot handle, are left alone.
                     used_assets.highlight = true;
                 }
             },
@@ -112,6 +112,24 @@ pub(crate) fn used_assets(root: Node) -> UsedAssets {
     }
 
     used_assets
+}
+
+/// Check whether **highlight.js** is expected to handle a code block language.
+fn is_highlighted(languages: HighlightLanguages, lang: &str) -> bool {
+    if lang.is_empty() {
+        return false;
+    }
+
+    match languages {
+        HighlightLanguages::BuiltIn => HIGHLIGHT_LANGUAGES
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .any(|name| name.eq_ignore_ascii_case(lang)),
+        HighlightLanguages::Any => true,
+        HighlightLanguages::Only(languages) => {
+            languages.iter().any(|name| name.eq_ignore_ascii_case(lang))
+        },
+    }
 }
 
 /// Read the `title` entry out of a YAML front matter.

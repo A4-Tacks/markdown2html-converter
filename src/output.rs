@@ -50,6 +50,22 @@ impl Output {
         self.digest("</script>")
     }
 
+    /// Write a `<link>` element which points to an external stylesheet.
+    #[inline]
+    pub(crate) fn stylesheet_link(&mut self, href: &str) -> Result<(), HTMLMinifierError> {
+        self.digest("<link rel=\"stylesheet\" href=\"")?;
+        self.digest(html_escape::encode_double_quoted_attribute(href).as_ref())?;
+        self.digest("\">")
+    }
+
+    /// Write a `<script>` element which points to an external script.
+    #[inline]
+    pub(crate) fn external_script(&mut self, src: &str) -> Result<(), HTMLMinifierError> {
+        self.digest("<script src=\"")?;
+        self.digest(html_escape::encode_double_quoted_attribute(src).as_ref())?;
+        self.digest("\"></script>")
+    }
+
     /// Write a `<style>` element whose content is already minified.
     #[inline]
     pub(crate) fn minified_style<S: AsRef<[u8]>>(

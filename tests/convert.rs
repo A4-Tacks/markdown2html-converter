@@ -1,4 +1,4 @@
-use markdown2html_converter::{ConvertOptions, Theme, convert};
+use markdown2html_converter::{ConvertOptions, HighlightLanguages, MathMode, Theme, convert};
 
 fn convert_to_string(markdown: &str, options: &ConvertOptions) -> String {
     String::from_utf8(convert(markdown, options).unwrap()).unwrap()
@@ -63,16 +63,75 @@ fn title_falls_back_to_the_default_title() {
     assert_eq!("The default title", title_of(html.as_str()));
 }
 
+fn math_html(math_mode: MathMode) -> String {
+    let options = ConvertOptions {
+        math: Some(math_mode),
+        ..ConvertOptions::default()
+    };
+
+    convert_to_string("The famous $E = mc^2$ equation.", &options)
+}
+
+fn code_html(highlight_languages: HighlightLanguages, lang: &str) -> String {
+    let options = ConvertOptions {
+        highlight_languages,
+        ..ConvertOptions::default()
+    };
+
+    convert_to_string(format!("```{lang}\nsomething\n```\n").as_str(), &options)
+}
+
 #[test]
-fn math_is_embedded_only_when_the_document_has_math() {
+fn math_assets_are_only_added_when_the_document_has_math() {
     let options = ConvertOptions::default();
 
     let without_math = convert_to_string("It costs $5 and $10.", &options);
     let with_math = convert_to_string("The famous $E = mc^2$ equation.", &options);
 
-    assert!(!without_math.contains("MathJax"));
-    assert!(with_math.contains("MathJax"));
+    assert!(!without_math.contains("npm/katex"));
+    assert!(with_math.contains("npm/katex"));
     assert!(with_math.contains("data-math-style=\"inline\""));
+}
+
+#[test]
+fn an_embedded_math_mode_carries_the_whole_library() {
+    let mathjax = math_html(MathMode::MathJaxEmbedded);
+    let katex = math_html(MathMode::KatexEmbedded);
+
+    assert!(mathjax.contains("MathJax"));
+    assert!(!mathjax.contains("npm/mathjax"));
+
+    assert!(katex.contains("katex.render"));
+    assert!(!katex.contains("npm/katex"));
+    // The fonts have to travel with the file for it to work offline.
+    assert!(katex.contains("data:font/woff2;base64,"));
+}
+
+#[test]
+fn a_client_math_mode_points_at_a_cdn() {
+    let mathjax = math_html(MathMode::MathJaxClient);
+    let katex = math_html(MathMode::KatexClient);
+
+    assert!(mathjax.contains("npm/mathjax"));
+    assert!(katex.contains("npm/katex"));
+    assert!(katex.contains("katex.render"));
+
+    assert!(mathjax.len() < math_html(MathMode::MathJaxEmbedded).len());
+    assert!(katex.len() < math_html(MathMode::KatexEmbedded).len());
+}
+
+#[test]
+fn math_is_left_alone_when_there_is_no_math_mode() {
+    let options = ConvertOptions {
+        math: None,
+        ..ConvertOptions::default()
+    };
+
+    let html = convert_to_string("The famous $E = mc^2$ equation.", &options);
+
+    assert!(!html.contains("npm/katex"));
+    assert!(!html.contains("MathJax"));
+    assert!(!html.contains("data-math-style"));
 }
 
 #[test]
@@ -85,6 +144,26 @@ fn highlight_is_embedded_only_when_a_code_block_has_a_language() {
     assert!(!without_language.contains("hljs"));
     assert!(with_language.contains("hljs"));
     assert!(with_language.contains("language-rust"));
+}
+
+#[test]
+fn highlight_is_embedded_only_for_a_language_it_supports() {
+    assert!(code_html(HighlightLanguages::BuiltIn, "rust").contains("hljs"));
+    assert!(!code_html(HighlightLanguages::BuiltIn, "mermaid").contains("hljs"));
+}
+
+#[test]
+fn the_built_in_languages_cover_the_aliases_and_ignore_the_case() {
+    for lang in ["js", "c++", "sh", "Rust", "YAML"] {
+        assert!(code_html(HighlightLanguages::BuiltIn, lang).contains("hljs"), "{lang}");
+    }
+}
+
+#[test]
+fn the_highlight_languages_are_configurable() {
+    assert!(code_html(HighlightLanguages::Any, "mermaid").contains("hljs"));
+    assert!(code_html(HighlightLanguages::Only(&["mermaid"]), "mermaid").contains("hljs"));
+    assert!(!code_html(HighlightLanguages::Only(&["mermaid"]), "rust").contains("hljs"));
 }
 
 #[test]

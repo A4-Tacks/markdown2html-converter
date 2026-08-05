@@ -62,9 +62,9 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
         },
     };
 
-    let used_assets = markdown::used_assets(root);
+    let used_assets = markdown::used_assets(root, options.highlight_languages);
     let has_code = options.highlight && used_assets.highlight;
-    let has_math = options.math && used_assets.math;
+    let math_mode = options.math.filter(|_| used_assets.math);
 
     let mut markdown_html = String::with_capacity(markdown.len() * 3 / 2);
 
@@ -133,12 +133,36 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
         }
     }
 
-    if has_math {
-        output.script(MATH_JAX_CONFIG_JS)?;
+    // The math library has to be defined before the code which uses it runs, so nothing here is deferred or async.
+    if let Some(math_mode) = math_mode {
+        match math_mode {
+            MathMode::MathJaxEmbedded => {
+                output.script(MATH_JAX_CONFIG_JS)?;
 
-        match options.mathjax_js {
-            Some(js) => output.script(html_escape::encode_script(js).as_ref())?,
-            None => output.minified_script(MATH_JAX_JS)?,
+                match options.mathjax_js {
+                    Some(js) => output.script(html_escape::encode_script(js).as_ref())?,
+                    None => output.minified_script(MATH_JAX_JS)?,
+                }
+            },
+            MathMode::MathJaxClient => {
+                output.script(MATH_JAX_CONFIG_JS)?;
+                output.external_script(MATH_JAX_CDN_JS)?;
+            },
+            MathMode::KatexEmbedded => {
+                match options.katex_css {
+                    Some(css) => output.style(html_escape::encode_style(css).as_ref())?,
+                    None => output.minified_style(KATEX_CSS)?,
+                }
+
+                match options.katex_js {
+                    Some(js) => output.script(html_escape::encode_script(js).as_ref())?,
+                    None => output.minified_script(KATEX_JS)?,
+                }
+            },
+            MathMode::KatexClient => {
+                output.stylesheet_link(KATEX_CDN_CSS)?;
+                output.external_script(KATEX_CDN_JS)?;
+            },
         }
     }
 
@@ -155,6 +179,10 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
 
     if has_code {
         output.script(HIGHLIGHT_CODE_JS)?;
+    }
+
+    if math_mode.is_some_and(MathMode::is_katex) {
+        output.script(KATEX_RENDER_JS)?;
     }
 
     output.digest("</body>")?;

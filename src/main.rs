@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::{Context, anyhow};
 use cli::*;
-use markdown2html_converter::ConvertOptions;
+use markdown2html_converter::{ConvertOptions, HighlightLanguages};
 
 /// The path which stands for the standard input or the standard output.
 const STDIO_PATH: &str = "-";
@@ -85,29 +85,46 @@ fn main() -> anyhow::Result<()> {
     let highlight_js = read_asset(args.highlight_js_path.as_deref())?;
     let highlight_css = read_asset(args.highlight_css_path.as_deref())?;
     let mathjax_js = read_asset(args.mathjax_js_path.as_deref())?;
+    let katex_js = read_asset(args.katex_js_path.as_deref())?;
+    let katex_css = read_asset(args.katex_css_path.as_deref())?;
+
+    let highlight_languages: Option<Vec<&str>> = args
+        .highlight_languages
+        .as_deref()
+        .map(|languages| languages.iter().map(String::as_str).collect());
 
     let options = ConvertOptions {
-        title:         args.title.as_deref(),
-        default_title: Some(default_title.as_ref()),
-        lang:          args.lang.as_str(),
-        theme:         args.theme,
-        allow_unsafe:  args.r#unsafe,
-        hardbreaks:    !args.no_hardbreaks,
-        highlight:     !args.no_highlight,
-        math:          !args.no_math,
-        cjk_fonts:     !args.no_cjk_fonts,
-        minify:        !args.no_minify,
-        embed_images:  args.embed_images,
-        base_path:     args.base_path.as_deref().or(if from_stdin {
+        title:               args.title.as_deref(),
+        default_title:       Some(default_title.as_ref()),
+        lang:                args.lang.as_str(),
+        theme:               args.theme,
+        allow_unsafe:        args.r#unsafe,
+        hardbreaks:          !args.no_hardbreaks,
+        highlight:           !args.no_highlight,
+        highlight_languages: match highlight_languages.as_deref() {
+            // `any` is a reserved name which no highlight.js language uses.
+            Some(languages) if languages.iter().any(|l| l.eq_ignore_ascii_case("any")) => {
+                HighlightLanguages::Any
+            },
+            Some(languages) => HighlightLanguages::Only(languages),
+            None => HighlightLanguages::BuiltIn,
+        },
+        math:                if args.no_math { None } else { Some(args.math_mode) },
+        cjk_fonts:           !args.no_cjk_fonts,
+        minify:              !args.no_minify,
+        embed_images:        args.embed_images,
+        base_path:           args.base_path.as_deref().or(if from_stdin {
             None
         } else {
             args.markdown_path.parent()
         }),
-        css:           css.as_deref(),
-        extra_css:     extra_css.as_deref(),
-        highlight_js:  highlight_js.as_deref(),
-        highlight_css: highlight_css.as_deref(),
-        mathjax_js:    mathjax_js.as_deref(),
+        css:                 css.as_deref(),
+        extra_css:           extra_css.as_deref(),
+        highlight_js:        highlight_js.as_deref(),
+        highlight_css:       highlight_css.as_deref(),
+        mathjax_js:          mathjax_js.as_deref(),
+        katex_js:            katex_js.as_deref(),
+        katex_css:           katex_css.as_deref(),
     };
 
     let html = markdown2html_converter::convert(markdown.as_str(), &options)?;

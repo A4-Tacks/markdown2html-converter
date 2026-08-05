@@ -66,66 +66,152 @@ impl Display for UnknownTheme {
 
 impl std::error::Error for UnknownTheme {}
 
+/// How the math in a Markdown file is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MathMode {
+    /// Embed the whole **MathJax** bundle.
+    MathJaxEmbedded,
+    /// Load **MathJax** from a CDN.
+    MathJaxClient,
+    /// Embed the whole **KaTeX** bundle, its fonts included.
+    KatexEmbedded,
+    /// Load **KaTeX** from a CDN.
+    #[default]
+    KatexClient,
+}
+
+impl MathMode {
+    /// Whether this mode renders the math with **KaTeX**.
+    #[inline]
+    pub const fn is_katex(self) -> bool {
+        matches!(self, Self::KatexEmbedded | Self::KatexClient)
+    }
+}
+
+impl Display for MathMode {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::MathJaxEmbedded => "mathjax-embedded",
+            Self::MathJaxClient => "mathjax-client",
+            Self::KatexEmbedded => "katex-embedded",
+            Self::KatexClient => "katex-client",
+        })
+    }
+}
+
+impl FromStr for MathMode {
+    type Err = UnknownMathMode;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mathjax-embedded" => Ok(Self::MathJaxEmbedded),
+            "mathjax-client" => Ok(Self::MathJaxClient),
+            "katex-embedded" => Ok(Self::KatexEmbedded),
+            "katex-client" => Ok(Self::KatexClient),
+            _ => Err(UnknownMathMode),
+        }
+    }
+}
+
+/// The error of parsing a [`MathMode`] from a string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnknownMathMode;
+
+impl Display for UnknownMathMode {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(
+            "the math mode should be one of `mathjax-embedded`, `mathjax-client`, \
+             `katex-embedded` and `katex-client`",
+        )
+    }
+}
+
+impl std::error::Error for UnknownMathMode {}
+
+/// Which code block languages make **highlight.js** be embedded. Languages are matched case-insensitively.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HighlightLanguages<'a> {
+    /// The languages which the built-in **highlight.js** supports.
+    #[default]
+    BuiltIn,
+    /// Every language.
+    Any,
+    /// Only the given languages.
+    Only(&'a [&'a str]),
+}
+
 /// Options for [`convert`](crate::convert).
 #[derive(Debug, Clone)]
 pub struct ConvertOptions<'a> {
     /// The title of the HTML file. When it is `None`, the title is looked up in the front matter and then in the first level-1 heading.
-    pub title:         Option<&'a str>,
+    pub title:               Option<&'a str>,
     /// The title to use when no title can be found in the Markdown file.
-    pub default_title: Option<&'a str>,
+    pub default_title:       Option<&'a str>,
     /// The `lang` attribute of the `<html>` element. An empty string omits the attribute.
-    pub lang:          &'a str,
+    pub lang:                &'a str,
     /// The color theme.
-    pub theme:         Theme,
+    pub theme:               Theme,
     /// Allow raw HTML and dangerous URLs.
-    pub allow_unsafe:  bool,
+    pub allow_unsafe:        bool,
     /// Treat a single line break as a `<br>`.
-    pub hardbreaks:    bool,
-    /// Embed **highlight.js** when the Markdown file has code blocks with a language.
-    pub highlight:     bool,
-    /// Embed **MathJax** when the Markdown file has math.
-    pub math:          bool,
+    pub hardbreaks:          bool,
+    /// Embed **highlight.js** when the Markdown file has code blocks with a supported language.
+    pub highlight:           bool,
+    /// Which code block languages make **highlight.js** be embedded.
+    pub highlight_languages: HighlightLanguages<'a>,
+    /// How the math is rendered. `None` leaves the math alone.
+    pub math:                Option<MathMode>,
     /// Embed the CJK fonts.
-    pub cjk_fonts:     bool,
+    pub cjk_fonts:           bool,
     /// Minify the output HTML.
-    pub minify:        bool,
+    pub minify:              bool,
     /// Embed local images as `data` URLs.
-    pub embed_images:  bool,
+    pub embed_images:        bool,
     /// The directory that relative paths in the Markdown file are resolved against.
-    pub base_path:     Option<&'a Path>,
+    pub base_path:           Option<&'a Path>,
     /// A stylesheet which replaces the built-in one.
-    pub css:           Option<&'a str>,
+    pub css:                 Option<&'a str>,
     /// A stylesheet which is appended after all the other stylesheets.
-    pub extra_css:     Option<&'a str>,
+    pub extra_css:           Option<&'a str>,
     /// A script which replaces the built-in **highlight.js**.
-    pub highlight_js:  Option<&'a str>,
+    pub highlight_js:        Option<&'a str>,
     /// A stylesheet which replaces the built-in **highlight.js** theme.
-    pub highlight_css: Option<&'a str>,
+    pub highlight_css:       Option<&'a str>,
     /// A script which replaces the built-in **MathJax**.
-    pub mathjax_js:    Option<&'a str>,
+    pub mathjax_js:          Option<&'a str>,
+    /// A script which replaces the built-in **KaTeX**.
+    pub katex_js:            Option<&'a str>,
+    /// A stylesheet which replaces the built-in **KaTeX** one.
+    pub katex_css:           Option<&'a str>,
 }
 
 impl Default for ConvertOptions<'_> {
     #[inline]
     fn default() -> Self {
         Self {
-            title:         None,
-            default_title: None,
-            lang:          "en",
-            theme:         Theme::default(),
-            allow_unsafe:  false,
-            hardbreaks:    true,
-            highlight:     true,
-            math:          true,
-            cjk_fonts:     true,
-            minify:        true,
-            embed_images:  false,
-            base_path:     None,
-            css:           None,
-            extra_css:     None,
-            highlight_js:  None,
-            highlight_css: None,
-            mathjax_js:    None,
+            title:               None,
+            default_title:       None,
+            lang:                "en",
+            theme:               Theme::default(),
+            allow_unsafe:        false,
+            hardbreaks:          true,
+            highlight:           true,
+            highlight_languages: HighlightLanguages::default(),
+            math:                Some(MathMode::default()),
+            cjk_fonts:           true,
+            minify:              true,
+            embed_images:        false,
+            base_path:           None,
+            css:                 None,
+            extra_css:           None,
+            highlight_js:        None,
+            highlight_css:       None,
+            mathjax_js:          None,
+            katex_js:            None,
+            katex_css:           None,
         }
     }
 }
