@@ -31,15 +31,19 @@ Options:
       --embed-images                             Embed local images as data URLs
       --base-path <BASE_PATH>                    Specify the base directory for relative local images
       --no-highlight                             Do not embed highlight.js
-      --no-math                                  Do not embed MathJax
+      --highlight-languages <LANGUAGES>          Specify which code block languages make highlight.js be embedded, separated by commas, or `any` for all of them [default: the languages of the built-in highlight.js]
+      --math-mode <MATH_MODE>                    Specify how the math is rendered [possible values: mathjax-embedded, mathjax-client, katex-embedded, katex-client] [default: katex-client]
+      --no-math                                  Do not render math
       --no-cjk-fonts                             Do not embed CJK fonts
       --no-hardbreaks                            Do not render single line breaks as <br>
       --no-minify                                Do not minify the output HTML
       --css-path <CSS_PATH>                      Specify a CSS file that replaces built-in Markdown styles
       --extra-css-path <EXTRA_CSS_PATH>          Specify an extra CSS file to append after all stylesheets
-      --highlight-js-path <HIGHLIGHT_JS_PATH>    Specify a custom highlight.js file
+      --highlight-js-path <HIGHLIGHT_JS_PATH>    Specify a custom highlight.js file. Pass --highlight-languages too when it supports other languages than the built-in one
       --highlight-css-path <HIGHLIGHT_CSS_PATH>  Specify custom CSS for highlight.js code blocks
       --mathjax-js-path <MATHJAX_JS_PATH>        Specify a custom single-file MathJax bundle
+      --katex-js-path <KATEX_JS_PATH>            Specify a custom KaTeX file
+      --katex-css-path <KATEX_CSS_PATH>          Specify custom CSS for KaTeX
   -h, --help                                     Print help
   -V, --version                                  Print version
 ```
@@ -57,7 +61,9 @@ When an output file is explicitly specified with `-o` (`--output`), its file nam
 
 ## Custom Assets
 
-`--css-path` replaces the built-in Markdown stylesheet. `--extra-css-path` is appended after every generated stylesheet, so it can override any built-in or custom styles. `--highlight-js-path`, `--highlight-css-path`, and `--mathjax-js-path` replace their respective built-in assets.
+`--css-path` replaces the built-in Markdown stylesheet. `--extra-css-path` is appended after every generated stylesheet, so it can override any built-in or custom styles. `--highlight-js-path`, `--highlight-css-path`, `--mathjax-js-path`, `--katex-js-path`, and `--katex-css-path` replace their respective built-in assets. Each of the math assets can only be used with the mode it belongs to, so `--mathjax-js-path` needs `--math-mode mathjax-embedded`, and the two KaTeX ones need `--math-mode katex-embedded`.
+
+`--highlight-js-path` does not change which languages make **highlight.js** be embedded, which is still the language list of the built-in build. When a custom build supports other languages, pass `--highlight-languages` as well, either with the languages you use or with `any`.
 
 Custom CSS and JavaScript are embedded in the generated HTML. Use only trusted files.
 
@@ -69,7 +75,7 @@ Only the image paths which are relative to the base path are embedded. Remote UR
 
 Markdown is converted to HTML by the [comrak](https://crates.io/crates/comrak) crate, with the GFM extensions (tables, task lists, footnotes, autolinks, strikethrough, [alerts](https://github.com/orgs/community/discussions/16925)) enabled. The default stylesheet (the CSS file) is from [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css).
 
-If ` ``` ` is used with a language in the input Markdown file, the [highlight.js](https://highlightjs.org/) will be automatically embedded in the output HTML file. The preset supported languages are listed below.
+If ` ``` ` is used with one of the languages below in the input Markdown file, the [highlight.js](https://highlightjs.org/) will be automatically embedded in the output HTML file. Any other language, such as ` ```mermaid `, leaves it out, because the built-in **highlight.js** could not do anything with it anyway. Use `--highlight-languages` to change that list. Aliases such as `js` and `c++` work too, and the matching ignores the case.
 
 * Apache
 * Bash
@@ -111,17 +117,31 @@ If ` ``` ` is used with a language in the input Markdown file, the [highlight.js
 * WebAssembly
 * YAML
 
-If math is used in the input Markdown file, the [MathJax](https://www.mathjax.org/) will be automatically embedded in the output HTML file. The supported syntaxes are listed below.
+If math is used in the input Markdown file, a math renderer is added to the output HTML file. The supported syntaxes are listed below.
 
 | Syntax | Result |
 | --- | --- |
 | `$E = mc^2$` | inline math |
 | `$$x = y$$` | display math |
+| `` $`a + b`$ `` | inline math |
 | `\(a + b\)` | inline math |
 | `\[a + b\]` | display math |
 | ` ```math ` block | display math |
 
-The default **MathJax** is the [tex-mml-svg](https://docs.mathjax.org/en/latest/web/components/combined.html#tex-mml-svg) configuration file. It draws math with inline SVG paths, so the output HTML file needs no web font and works offline.
+## Math Modes
+
+`--math-mode` picks the renderer and how it travels with the output HTML file. The sizes below are what each mode adds to a file which contains math.
+
+| Mode | Added | Works offline | Notes |
+| --- | --- | --- | --- |
+| `katex-client` (default) | ~0 | no | Loads [KaTeX](https://katex.org/) from a CDN |
+| `katex-embedded` | ~630 KB | yes | Embeds **KaTeX**, its stylesheet, and its fonts |
+| `mathjax-client` | ~0 | no | Loads [MathJax](https://www.mathjax.org/) from a CDN |
+| `mathjax-embedded` | ~1.85 MB | yes | Embeds the whole **MathJax** bundle |
+
+The built-in **MathJax** is the [tex-mml-svg](https://docs.mathjax.org/en/latest/web/components/combined.html#tex-mml-svg) configuration file, which draws math with inline SVG paths and therefore needs no web font. **KaTeX** needs its own fonts, so `katex-embedded` carries them inside its stylesheet as `data` URLs.
+
+Use `--no-math` to leave the math alone. The delimiters are then not treated as math at all, so a `$` in the text stays a `$`.
 
 ## Themes
 
@@ -129,7 +149,13 @@ By default, the output HTML file follows the `prefers-color-scheme` media featur
 
 ## Offline Usage
 
-Everything but the CJK fonts is embedded in the output HTML file. Add `--no-cjk-fonts` to make the output HTML file completely self-contained, and `--embed-images` to inline the local images it refers to.
+The default math mode loads **KaTeX** from a CDN, so a file which contains math needs the network. Pick an embedded math mode to avoid that.
+
+```bash
+markdown2html-converter /path/to/file.md --math-mode katex-embedded --no-cjk-fonts --embed-images
+```
+
+`--math-mode katex-embedded` (or `mathjax-embedded`) keeps the math renderer inside the file, `--no-cjk-fonts` drops the only other CDN reference, and `--embed-images` inlines the local images it refers to. The result is a completely self-contained HTML file.
 
 ## Library
 
@@ -140,6 +166,24 @@ use markdown2html_converter::ConvertOptions;
 
 let html = markdown2html_converter::convert("# Hello world!", &ConvertOptions::default()).unwrap();
 ```
+
+## Updating the Built-in Assets
+
+Two files under `resources` are generated rather than taken from upstream as-is, so they need a step of their own.
+
+`resources/katex.min.css` is the stylesheet of **KaTeX** with its woff2 fonts inlined as `data` URLs and the woff and ttf fallbacks dropped. To move to another **KaTeX** version, copy the `katex.min.js` of its `dist` directory over `resources/katex.min.js`, then build the stylesheet out of the same `dist` directory.
+
+```bash
+node tools/build-katex-css.js /path/to/katex/dist > resources/katex.min.css
+```
+
+`resources/highlight-languages.txt` lists the languages, aliases included, which `resources/highlight.min.js` registers. Regenerate it whenever the **highlight.js** build changes, and update the language list in this README to match.
+
+```bash
+node tools/list-highlight-languages.js resources/highlight.min.js
+```
+
+The CDN URLs of the client math modes are pinned in `src/resources.rs` and have to be moved together with the files above, so that every mode renders the same math.
 
 ## A Markdown Example
 
