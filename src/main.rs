@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
         Some(path) => Some(Cow::from(path)),
         None if from_stdin => None,
         None => {
-            let folder_path = args.markdown_path.parent().unwrap();
+            let folder_path = args.markdown_path.parent().unwrap_or(Path::new(""));
 
             Some(Cow::from(folder_path.join(format!("{input_file_stem}.html"))))
         },
@@ -60,7 +60,11 @@ fn main() -> anyhow::Result<()> {
 
         match html_path.metadata() {
             Ok(metadata) => {
-                if metadata.is_dir() || !args.force {
+                if metadata.is_dir() {
+                    return Err(anyhow!("{html_path:?} is a directory!"));
+                }
+
+                if !args.force {
                     return Err(anyhow!("{html_path:?} exists!"));
                 }
             },

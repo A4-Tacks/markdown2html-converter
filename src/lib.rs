@@ -71,7 +71,8 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
     // Writing into a `String` never fails.
     format_html(root, &comrak_options, &mut markdown_html).unwrap();
 
-    let mut output = Output::new(options.minify);
+    let mut output =
+        Output::new(options.minify, output_capacity(options, &markdown_html, has_code, math_mode));
 
     output.digest("<!DOCTYPE html>")?;
     output.digest(html_element(options))?;
@@ -189,6 +190,43 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
     output.digest("</html>")?;
 
     Ok(output.into_html())
+}
+
+/// Estimate how big the output is going to be. The assets are what makes it big, so only the ones which are going to be written are counted.
+fn output_capacity(
+    options: &ConvertOptions,
+    markdown_html: &str,
+    has_code: bool,
+    math_mode: Option<MathMode>,
+) -> usize {
+    let code = if has_code {
+        options.highlight_js.map_or(HIGHLIGHT_JS.len(), str::len)
+            + options
+                .highlight_css
+                .map_or(HIGHLIGHT_CSS_LIGHT.len() + HIGHLIGHT_CSS_DARK.len(), str::len)
+    } else {
+        0
+    };
+
+    let math = match math_mode {
+        Some(MathMode::MathJaxEmbedded) => options.mathjax_js.map_or(MATH_JAX_JS.len(), str::len),
+        Some(MathMode::KatexEmbedded) => {
+            options.katex_js.map_or(KATEX_JS.len(), str::len)
+                + options.katex_css.map_or(KATEX_CSS.len(), str::len)
+        },
+        _ => 0,
+    };
+
+    let cjk_fonts =
+        if options.cjk_fonts { FONT_CJK_CSS.len() + FONT_CJK_MONO_CSS.len() } else { 0 };
+
+    markdown_html.len()
+        + PAGE_CSS.len()
+        + options.css.map_or(MARKDOWN_CSS.len(), str::len)
+        + options.extra_css.map_or(0, str::len)
+        + cjk_fonts
+        + code
+        + math
 }
 
 fn html_element(options: &ConvertOptions) -> String {

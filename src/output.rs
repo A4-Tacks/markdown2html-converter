@@ -7,9 +7,14 @@ pub(crate) enum Output {
 }
 
 impl Output {
+    /// `capacity` is only a hint for the plain variant, because the minifier owns its buffer and cannot be given one.
     #[inline]
-    pub(crate) fn new(minify: bool) -> Self {
-        if minify { Self::Minified(Box::new(HTMLMinifier::new())) } else { Self::Plain(Vec::new()) }
+    pub(crate) fn new(minify: bool, capacity: usize) -> Self {
+        if minify {
+            Self::Minified(Box::new(HTMLMinifier::new()))
+        } else {
+            Self::Plain(Vec::with_capacity(capacity))
+        }
     }
 
     #[inline]

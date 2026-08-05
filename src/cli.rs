@@ -83,7 +83,8 @@ pub struct CLIArgs {
                   mathjax-client, katex-embedded, katex-client]")]
     pub math_mode: MathMode,
 
-    #[arg(long, conflicts_with = "math_mode")]
+    #[arg(long)]
+    #[arg(conflicts_with_all = ["math_mode", "mathjax_js_path", "katex_js_path", "katex_css_path"])]
     #[arg(help = "Do not render math")]
     pub no_math: bool,
 
@@ -109,13 +110,13 @@ pub struct CLIArgs {
     #[arg(help = "Specify an extra CSS file to append after all stylesheets")]
     pub extra_css_path: Option<PathBuf>,
 
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_highlight")]
     #[arg(value_hint = clap::ValueHint::FilePath)]
     #[arg(help = "Specify a custom highlight.js file. Pass --highlight-languages too when it \
                   supports other languages than the built-in one")]
     pub highlight_js_path: Option<PathBuf>,
 
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_highlight")]
     #[arg(value_hint = clap::ValueHint::FilePath)]
     #[arg(help = "Specify custom CSS for highlight.js code blocks")]
     pub highlight_css_path: Option<PathBuf>,

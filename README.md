@@ -69,7 +69,7 @@ Custom CSS and JavaScript are embedded in the generated HTML. Use only trusted f
 
 `--base-path` controls how relative local image paths are resolved by `--embed-images`. It defaults to the Markdown file's directory and is required to choose another directory when reading Markdown from the standard input. It can only be used together with `--embed-images`.
 
-Only the image paths which are relative to the base path are embedded. Remote URLs, `data` URLs, and absolute paths such as `/pictures/pic.png` or `C:\pictures\pic.png` are left untouched.
+Only the images which stay inside the base path are embedded. Remote URLs, `data` URLs, and absolute paths such as `/pictures/pic.png` or `C:\pictures\pic.png` are left untouched, and so are the paths which climb out of the base path with `..` or through a symbolic link.
 
 ## Dependency
 
@@ -156,16 +156,6 @@ markdown2html-converter /path/to/file.md --math-mode katex-embedded --no-cjk-fon
 ```
 
 `--math-mode katex-embedded` (or `mathjax-embedded`) keeps the math renderer inside the file, `--no-cjk-fonts` drops the only other CDN reference, and `--embed-images` inlines the local images it refers to. The result is a completely self-contained HTML file.
-
-## Library
-
-This crate can also be used as a library.
-
-```rust
-use markdown2html_converter::ConvertOptions;
-
-let html = markdown2html_converter::convert("# Hello world!", &ConvertOptions::default()).unwrap();
-```
 
 ## Updating the Built-in Assets
 

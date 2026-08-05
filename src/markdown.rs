@@ -1,4 +1,10 @@
-use std::{borrow::Cow, fs, path::Path, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    fs,
+    path::Path,
+    sync::{Arc, Mutex, PoisonError},
+};
 
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use comrak::nodes::{Node, NodeCode, NodeValue};
@@ -47,13 +53,34 @@ pub(crate) fn build_comrak_options(options: &ConvertOptions) -> comrak::Options<
     }
 
     if options.embed_images {
-        let base_path = options.base_path.unwrap_or(Path::new("")).to_path_buf();
+        // An empty base path stands for the current directory, which `canonicalize` cannot resolve on its own.
+        let base_path = match options.base_path {
+            Some(path) if !path.as_os_str().is_empty() => path,
+            _ => Path::new("."),
+        };
 
-        comrak_options.extension.image_url_rewriter =
-            Some(Arc::new(move |url: &str| match embed_image(base_path.as_path(), url) {
-                Some(data_url) => data_url,
-                None => url.to_string(),
-            }));
+        // Resolving the base path once here keeps the check for an image which escapes it down to one syscall per image.
+        let real_base_path = fs::canonicalize(base_path).ok();
+        let base_path = base_path.to_path_buf();
+
+        // The same image may be referenced many times, and reading and encoding it again for each of them would be wasteful.
+        let embedded: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+
+        comrak_options.extension.image_url_rewriter = Some(Arc::new(move |url: &str| {
+            let mut embedded = embedded.lock().unwrap_or_else(PoisonError::into_inner);
+
+            embedded
+                .entry(url.to_string())
+                .or_insert_with(|| {
+                    real_base_path
+                        .as_deref()
+                        .and_then(|real_base_path| {
+                            embed_image(base_path.as_path(), real_base_path, url)
+                        })
+                        .unwrap_or_else(|| url.to_string())
+                })
+                .clone()
+        }));
     }
 
     comrak_options
@@ -61,8 +88,6 @@ pub(crate) fn build_comrak_options(options: &ConvertOptions) -> comrak::Options<
 
 /// Find the title of a document, first in its front matter and then in its first level-1 heading.
 pub(crate) fn document_title(root: Node) -> Option<String> {
-    let mut heading_title = None;
-
     for node in root.children() {
         match node.data.borrow().value {
             NodeValue::FrontMatter(ref front_matter) => {
@@ -70,20 +95,19 @@ pub(crate) fn document_title(root: Node) -> Option<String> {
                     return Some(title);
                 }
             },
-            NodeValue::Heading(heading) if heading.level == 1 && heading_title.is_none() => {
+            NodeValue::Heading(heading) if heading.level == 1 => {
                 let title = node_text(node);
 
                 if !title.is_empty() {
                     // A front matter is always the first node, so nothing can override this title any more.
-                    heading_title = Some(title);
-                    break;
+                    return Some(title);
                 }
             },
             _ => (),
         }
     }
 
-    heading_title
+    None
 }
 
 /// Check which optional assets a document needs.
@@ -159,8 +183,10 @@ fn node_text(node: Node) -> String {
     text.trim().to_string()
 }
 
-/// Turn a local image into a `data` URL. Only the paths which are relative to the base path are embedded.
-fn embed_image(base_path: &Path, url: &str) -> Option<String> {
+/// Turn a local image into a `data` URL. Only the images which stay inside the base path are embedded.
+///
+/// `real_base_path` is the canonical form of `base_path`. The two are kept apart because a canonical path is verbatim on Windows, where `..` is then no longer resolved.
+fn embed_image(base_path: &Path, real_base_path: &Path, url: &str) -> Option<String> {
     if url.is_empty() || url.starts_with(['#', '/', '\\']) || has_scheme(url) {
         return None;
     }
@@ -176,11 +202,22 @@ fn embed_image(base_path: &Path, url: &str) -> Option<String> {
         return None;
     }
 
-    let path = base_path.join(relative_path);
-    let mime = image_mime(path.extension()?.to_str()?)?;
+    let mime = image_mime(relative_path.extension()?.to_str()?)?;
+    let path = fs::canonicalize(base_path.join(relative_path)).ok()?;
+
+    // `..` could still climb out of the base path, and a symbolic link could point anywhere.
+    if !path.starts_with(real_base_path) {
+        return None;
+    }
+
     let image = fs::read(path).ok()?;
 
-    let mut data_url = String::with_capacity(mime.len() + 13 + image.len().div_ceil(3) * 4);
+    let mut data_url = String::with_capacity(
+        mime.len()
+            + 13
+            + image.len().div_ceil(3) * 4
+            + fragment.map_or(0, |fragment| fragment.len() + 1),
+    );
 
     data_url.push_str("data:");
     data_url.push_str(mime);
@@ -323,19 +360,28 @@ mod tests {
     #[test]
     fn only_relative_images_are_embedded() {
         let dir = env::temp_dir().join("markdown2html-converter-unit-embed-image");
+        let sub_dir = dir.join("sub");
         let path = dir.join("pic.png");
 
-        fs::create_dir_all(dir.as_path()).unwrap();
+        fs::create_dir_all(sub_dir.as_path()).unwrap();
         fs::write(path.as_path(), b"an image").unwrap();
 
-        assert_eq!(
-            Some(String::from("data:image/png;base64,YW4gaW1hZ2U=")),
-            embed_image(dir.as_path(), "pic.png")
-        );
+        let real_dir = fs::canonicalize(dir.as_path()).unwrap();
+        let real_sub_dir = fs::canonicalize(sub_dir.as_path()).unwrap();
+
+        let from_dir = |url: &str| embed_image(dir.as_path(), real_dir.as_path(), url);
+        let from_sub_dir = |url: &str| embed_image(sub_dir.as_path(), real_sub_dir.as_path(), url);
+
+        let data_url = Some(String::from("data:image/png;base64,YW4gaW1hZ2U="));
+
+        assert_eq!(data_url, from_dir("pic.png"));
+        // A path which leaves the base path and comes back is still inside it.
+        assert_eq!(data_url, from_dir("sub/../pic.png"));
         // The file is there, but it may only be reached relatively to the base path.
-        assert_eq!(None, embed_image(dir.as_path(), path.to_str().unwrap()));
-        assert_eq!(None, embed_image(dir.as_path(), "https://magiclen.org/pic.png"));
-        assert_eq!(None, embed_image(dir.as_path(), "//magiclen.org/pic.png"));
-        assert_eq!(None, embed_image(dir.as_path(), "#anchor"));
+        assert_eq!(None, from_sub_dir("../pic.png"));
+        assert_eq!(None, from_dir(path.to_str().unwrap()));
+        assert_eq!(None, from_dir("https://magiclen.org/pic.png"));
+        assert_eq!(None, from_dir("//magiclen.org/pic.png"));
+        assert_eq!(None, from_dir("#anchor"));
     }
 }
