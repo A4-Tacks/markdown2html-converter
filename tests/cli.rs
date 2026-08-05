@@ -26,7 +26,8 @@ fn convert_stdin(markdown: &str, args: &[&str]) -> Output {
         .spawn()
         .unwrap();
 
-    child.stdin.take().unwrap().write_all(markdown.as_bytes()).unwrap();
+    // A rejected argument makes the binary exit before it reads anything, and the pipe is then already closed.
+    let _ = child.stdin.take().unwrap().write_all(markdown.as_bytes());
 
     child.wait_with_output().unwrap()
 }
