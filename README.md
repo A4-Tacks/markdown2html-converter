@@ -179,7 +179,7 @@ The CDN URLs of the client math modes are pinned in `src/resources.rs` and have 
 
 [The Markdown File](https://github.com/magiclen/markdown2html-converter/blob/master/example.md)
 
-[The HTML File](https://jsfiddle.net/magiclen/jgs324w0/latest)
+[The HTML File](https://codepen.io/editor/magiclen/pen/019fd237-98ce-79e6-b013-70f9a001ca7c)
 
 ## License
 
