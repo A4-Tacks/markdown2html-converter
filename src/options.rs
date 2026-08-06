@@ -131,6 +131,52 @@ impl Display for UnknownMathMode {
 
 impl std::error::Error for UnknownMathMode {}
 
+/// How the **Mermaid** diagrams in a Markdown file are rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MermaidMode {
+    /// Embed the whole **Mermaid** bundle.
+    Embedded,
+    /// Load **Mermaid** from a CDN.
+    #[default]
+    Client,
+}
+
+impl Display for MermaidMode {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Embedded => "embedded",
+            Self::Client => "client",
+        })
+    }
+}
+
+impl FromStr for MermaidMode {
+    type Err = UnknownMermaidMode;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "embedded" => Ok(Self::Embedded),
+            "client" => Ok(Self::Client),
+            _ => Err(UnknownMermaidMode),
+        }
+    }
+}
+
+/// The error of parsing a [`MermaidMode`] from a string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnknownMermaidMode;
+
+impl Display for UnknownMermaidMode {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("the Mermaid mode should be either `embedded` or `client`")
+    }
+}
+
+impl std::error::Error for UnknownMermaidMode {}
+
 /// Which code block languages make **highlight.js** be embedded. Languages are matched case-insensitively.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HighlightLanguages<'a> {
@@ -164,6 +210,8 @@ pub struct ConvertOptions<'a> {
     pub highlight_languages: HighlightLanguages<'a>,
     /// How the math is rendered. `None` leaves the math alone.
     pub math:                Option<MathMode>,
+    /// How the **Mermaid** diagrams are rendered. `None` leaves a ```` ```mermaid ```` block as a code block.
+    pub mermaid:             Option<MermaidMode>,
     /// Embed the CJK fonts.
     pub cjk_fonts:           bool,
     /// Minify the output HTML.
@@ -186,6 +234,8 @@ pub struct ConvertOptions<'a> {
     pub katex_js:            Option<&'a str>,
     /// A stylesheet which replaces the built-in **KaTeX** one.
     pub katex_css:           Option<&'a str>,
+    /// A script which replaces the built-in **Mermaid**.
+    pub mermaid_js:          Option<&'a str>,
 }
 
 impl Default for ConvertOptions<'_> {
@@ -201,6 +251,7 @@ impl Default for ConvertOptions<'_> {
             highlight:           true,
             highlight_languages: HighlightLanguages::default(),
             math:                Some(MathMode::default()),
+            mermaid:             Some(MermaidMode::default()),
             cjk_fonts:           true,
             minify:              true,
             embed_images:        false,
@@ -212,6 +263,7 @@ impl Default for ConvertOptions<'_> {
             mathjax_js:          None,
             katex_js:            None,
             katex_css:           None,
+            mermaid_js:          None,
         }
     }
 }

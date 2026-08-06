@@ -1,4 +1,8 @@
-use markdown2html_converter::{ConvertOptions, HighlightLanguages, MathMode, Theme, convert};
+use markdown2html_converter::{
+    ConvertOptions, HighlightLanguages, MathMode, MermaidMode, Theme, convert,
+};
+
+const MERMAID_MARKDOWN: &str = "```mermaid\ngraph TD; A-->B;\n```\n";
 
 fn convert_to_string(markdown: &str, options: &ConvertOptions) -> String {
     String::from_utf8(convert(markdown, options).unwrap()).unwrap()
@@ -134,6 +138,60 @@ fn math_is_left_alone_when_there_is_no_math_mode() {
     assert!(!html.contains("data-math-style"));
 }
 
+fn mermaid_html(mermaid_mode: MermaidMode) -> String {
+    let options = ConvertOptions {
+        mermaid: Some(mermaid_mode),
+        ..ConvertOptions::default()
+    };
+
+    convert_to_string(MERMAID_MARKDOWN, &options)
+}
+
+#[test]
+fn mermaid_assets_are_only_added_when_the_document_has_a_diagram() {
+    let options = ConvertOptions::default();
+
+    let without_diagram = convert_to_string("```rust\nfn main() {}\n```\n", &options);
+    let with_diagram = convert_to_string(MERMAID_MARKDOWN, &options);
+
+    assert!(!without_diagram.contains("npm/mermaid"));
+    assert!(with_diagram.contains("npm/mermaid"));
+    assert!(with_diagram.contains("mermaid.run"));
+}
+
+#[test]
+fn an_embedded_mermaid_mode_carries_the_whole_library() {
+    let html = mermaid_html(MermaidMode::Embedded);
+
+    assert!(html.contains("mermaid.run"));
+    assert!(!html.contains("npm/mermaid"));
+    assert!(html.len() > mermaid_html(MermaidMode::Client).len());
+}
+
+#[test]
+fn a_client_mermaid_mode_points_at_a_cdn() {
+    let html = mermaid_html(MermaidMode::Client);
+
+    assert!(html.contains("npm/mermaid"));
+    assert!(html.contains("mermaid.run"));
+}
+
+#[test]
+fn a_mermaid_block_stays_a_code_block_when_there_is_no_mermaid_mode() {
+    let options = ConvertOptions {
+        mermaid: None,
+        highlight_languages: HighlightLanguages::Only(&["mermaid"]),
+        ..ConvertOptions::default()
+    };
+
+    let html = convert_to_string(MERMAID_MARKDOWN, &options);
+
+    assert!(!html.contains("npm/mermaid"));
+    assert!(!html.contains("mermaid.run"));
+    // Without Mermaid the block is ordinary code, so highlight.js may take it.
+    assert!(html.contains("hljs"));
+}
+
 #[test]
 fn highlight_is_embedded_only_when_a_code_block_has_a_language() {
     let options = ConvertOptions::default();
@@ -149,7 +207,7 @@ fn highlight_is_embedded_only_when_a_code_block_has_a_language() {
 #[test]
 fn highlight_is_embedded_only_for_a_language_it_supports() {
     assert!(code_html(HighlightLanguages::BuiltIn, "rust").contains("hljs"));
-    assert!(!code_html(HighlightLanguages::BuiltIn, "mermaid").contains("hljs"));
+    assert!(!code_html(HighlightLanguages::BuiltIn, "plantuml").contains("hljs"));
 }
 
 #[test]
@@ -161,9 +219,9 @@ fn the_built_in_languages_cover_the_aliases_and_ignore_the_case() {
 
 #[test]
 fn the_highlight_languages_are_configurable() {
-    assert!(code_html(HighlightLanguages::Any, "mermaid").contains("hljs"));
-    assert!(code_html(HighlightLanguages::Only(&["mermaid"]), "mermaid").contains("hljs"));
-    assert!(!code_html(HighlightLanguages::Only(&["mermaid"]), "rust").contains("hljs"));
+    assert!(code_html(HighlightLanguages::Any, "plantuml").contains("hljs"));
+    assert!(code_html(HighlightLanguages::Only(&["plantuml"]), "plantuml").contains("hljs"));
+    assert!(!code_html(HighlightLanguages::Only(&["plantuml"]), "rust").contains("hljs"));
 }
 
 #[test]

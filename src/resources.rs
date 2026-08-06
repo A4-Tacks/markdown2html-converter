@@ -23,8 +23,14 @@ pub(crate) const KATEX_CSS: &str = include_str!("../resources/katex.min.css");
 pub(crate) const KATEX_JS: &str = include_str!("../resources/katex.min.js");
 pub(crate) const KATEX_RENDER_JS: &str = include_str!("../resources/katex-render.js");
 
+/// The `resources/mermaid.min.js` file is the UMD build, which carries every diagram type instead of loading them on demand.
+pub(crate) const MERMAID_JS: &str = include_str!("../resources/mermaid.min.js");
+pub(crate) const MERMAID_RENDER_JS: &str = include_str!("../resources/mermaid-render.js");
+
 pub(crate) const MATH_JAX_CDN_JS: &str =
     "https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-mml-svg.js";
 pub(crate) const KATEX_CDN_CSS: &str =
     "https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.css";
 pub(crate) const KATEX_CDN_JS: &str = "https://cdn.jsdelivr.net/npm/katex@0.18.1/dist/katex.min.js";
+pub(crate) const MERMAID_CDN_JS: &str =
+    "https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js";

@@ -62,17 +62,20 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
         },
     };
 
-    let used_assets = markdown::used_assets(root, options.highlight_languages);
+    let used_assets = markdown::used_assets(root, options);
     let has_code = options.highlight && used_assets.highlight;
     let math_mode = options.math.filter(|_| used_assets.math);
+    let mermaid_mode = options.mermaid.filter(|_| used_assets.mermaid);
 
     let mut markdown_html = String::with_capacity(markdown.len() * 3 / 2);
 
     // Writing into a `String` never fails.
     format_html(root, &comrak_options, &mut markdown_html).unwrap();
 
-    let mut output =
-        Output::new(options.minify, output_capacity(options, &markdown_html, has_code, math_mode));
+    let mut output = Output::new(
+        options.minify,
+        output_capacity(options, &markdown_html, has_code, math_mode, mermaid_mode),
+    );
 
     output.digest("<!DOCTYPE html>")?;
     output.digest(html_element(options))?;
@@ -167,6 +170,17 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
         }
     }
 
+    // Mermaid is loaded here for the same reason as the math library, and it also has to be ready before highlight.js looks at the code blocks.
+    if let Some(mermaid_mode) = mermaid_mode {
+        match mermaid_mode {
+            MermaidMode::Embedded => match options.mermaid_js {
+                Some(js) => output.script(html_escape::encode_script(js).as_ref())?,
+                None => output.minified_script(MERMAID_JS)?,
+            },
+            MermaidMode::Client => output.external_script(MERMAID_CDN_JS)?,
+        }
+    }
+
     if let Some(css) = options.extra_css {
         output.style(html_escape::encode_style(css).as_ref())?;
     }
@@ -177,6 +191,11 @@ pub fn convert(markdown: &str, options: &ConvertOptions) -> Result<Vec<u8>, Conv
     output.digest("<article class=\"markdown-body\">")?;
     output.digest(&markdown_html)?;
     output.digest("</article>")?;
+
+    // This runs first so that the code blocks it turns into diagrams are gone by the time highlight.js walks the document.
+    if mermaid_mode.is_some() {
+        output.script(MERMAID_RENDER_JS)?;
+    }
 
     if has_code {
         output.script(HIGHLIGHT_CODE_JS)?;
@@ -198,6 +217,7 @@ fn output_capacity(
     markdown_html: &str,
     has_code: bool,
     math_mode: Option<MathMode>,
+    mermaid_mode: Option<MermaidMode>,
 ) -> usize {
     let code = if has_code {
         options.highlight_js.map_or(HIGHLIGHT_JS.len(), str::len)
@@ -217,6 +237,11 @@ fn output_capacity(
         _ => 0,
     };
 
+    let mermaid = match mermaid_mode {
+        Some(MermaidMode::Embedded) => options.mermaid_js.map_or(MERMAID_JS.len(), str::len),
+        _ => 0,
+    };
+
     let cjk_fonts =
         if options.cjk_fonts { FONT_CJK_CSS.len() + FONT_CJK_MONO_CSS.len() } else { 0 };
 
@@ -227,6 +252,7 @@ fn output_capacity(
         + cjk_fonts
         + code
         + math
+        + mermaid
 }
 
 fn html_element(options: &ConvertOptions) -> String {

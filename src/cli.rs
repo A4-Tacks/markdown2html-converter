@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 
 use clap::{CommandFactory, FromArgMatches, Parser, error::ErrorKind};
 use concat_with::concat_line;
-use markdown2html_converter::{APP_NAME, CARGO_PKG_VERSION, MathMode, Theme};
+use markdown2html_converter::{APP_NAME, CARGO_PKG_VERSION, MathMode, MermaidMode, Theme};
 use terminal_size::terminal_size;
 
 const CARGO_PKG_AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
@@ -88,6 +88,17 @@ pub struct CLIArgs {
     #[arg(help = "Do not render math")]
     pub no_math: bool,
 
+    #[arg(long, default_value_t = MermaidMode::default(), value_parser = parse_mermaid_mode)]
+    #[arg(
+        help = "Specify how the Mermaid diagrams are rendered [possible values: embedded, client]"
+    )]
+    pub mermaid_mode: MermaidMode,
+
+    #[arg(long)]
+    #[arg(conflicts_with_all = ["mermaid_mode", "mermaid_js_path"])]
+    #[arg(help = "Do not render Mermaid diagrams")]
+    pub no_mermaid: bool,
+
     #[arg(long)]
     #[arg(help = "Do not embed CJK fonts")]
     pub no_cjk_fonts: bool,
@@ -135,6 +146,11 @@ pub struct CLIArgs {
     #[arg(value_hint = clap::ValueHint::FilePath)]
     #[arg(help = "Specify custom CSS for KaTeX")]
     pub katex_css_path: Option<PathBuf>,
+
+    #[arg(long)]
+    #[arg(value_hint = clap::ValueHint::FilePath)]
+    #[arg(help = "Specify a custom single-file Mermaid bundle")]
+    pub mermaid_js_path: Option<PathBuf>,
 }
 
 fn parse_theme(theme: &str) -> Result<Theme, String> {
@@ -143,6 +159,10 @@ fn parse_theme(theme: &str) -> Result<Theme, String> {
 
 fn parse_math_mode(math_mode: &str) -> Result<MathMode, String> {
     MathMode::from_str(math_mode).map_err(|error| error.to_string())
+}
+
+fn parse_mermaid_mode(mermaid_mode: &str) -> Result<MermaidMode, String> {
+    MermaidMode::from_str(mermaid_mode).map_err(|error| error.to_string())
 }
 
 pub fn get_args() -> CLIArgs {
@@ -161,12 +181,12 @@ pub fn get_args() -> CLIArgs {
         },
     };
 
-    // clap can require an argument to be present, but not to have a certain value, so the assets which fit only one math mode are checked here.
-    if let Some((option, math_mode)) = misplaced_math_asset(&args) {
+    // clap can require an argument to be present, but not to have a certain value, so the assets which fit only one mode are checked here.
+    if let Some((option, mode)) = misplaced_asset(&args) {
         CLIArgs::command()
             .error(
                 ErrorKind::ArgumentConflict,
-                format!("the argument '{option}' can only be used with '--math-mode {math_mode}'"),
+                format!("the argument '{option}' can only be used with '{mode}'"),
             )
             .exit();
     }
@@ -174,18 +194,22 @@ pub fn get_args() -> CLIArgs {
     args
 }
 
-/// Find an asset option which needs a math mode other than the chosen one.
-fn misplaced_math_asset(args: &CLIArgs) -> Option<(&'static str, MathMode)> {
+/// Find an asset option which needs a mode other than the chosen one.
+fn misplaced_asset(args: &CLIArgs) -> Option<(&'static str, String)> {
     if args.mathjax_js_path.is_some() && args.math_mode != MathMode::MathJaxEmbedded {
-        return Some(("--mathjax-js-path", MathMode::MathJaxEmbedded));
+        return Some(("--mathjax-js-path", format!("--math-mode {}", MathMode::MathJaxEmbedded)));
     }
 
     if args.katex_js_path.is_some() && args.math_mode != MathMode::KatexEmbedded {
-        return Some(("--katex-js-path", MathMode::KatexEmbedded));
+        return Some(("--katex-js-path", format!("--math-mode {}", MathMode::KatexEmbedded)));
     }
 
     if args.katex_css_path.is_some() && args.math_mode != MathMode::KatexEmbedded {
-        return Some(("--katex-css-path", MathMode::KatexEmbedded));
+        return Some(("--katex-css-path", format!("--math-mode {}", MathMode::KatexEmbedded)));
+    }
+
+    if args.mermaid_js_path.is_some() && args.mermaid_mode != MermaidMode::Embedded {
+        return Some(("--mermaid-js-path", format!("--mermaid-mode {}", MermaidMode::Embedded)));
     }
 
     None

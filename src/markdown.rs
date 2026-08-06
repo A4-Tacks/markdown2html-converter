@@ -17,6 +17,7 @@ use crate::{ConvertOptions, HighlightLanguages, resources::HIGHLIGHT_LANGUAGES};
 pub(crate) struct UsedAssets {
     pub(crate) highlight: bool,
     pub(crate) math:      bool,
+    pub(crate) mermaid:   bool,
 }
 
 /// Build the **comrak** options matching the given conversion options.
@@ -111,7 +112,10 @@ pub(crate) fn document_title(root: Node) -> Option<String> {
 }
 
 /// Check which optional assets a document needs.
-pub(crate) fn used_assets(root: Node, languages: HighlightLanguages) -> UsedAssets {
+pub(crate) fn used_assets(root: Node, options: &ConvertOptions) -> UsedAssets {
+    // A ```mermaid block is a diagram only when Mermaid is going to draw it, and an ordinary code block otherwise.
+    let wants_mermaid = options.mermaid.is_some();
+
     let mut used_assets = UsedAssets::default();
 
     for node in root.descendants() {
@@ -121,7 +125,9 @@ pub(crate) fn used_assets(root: Node, languages: HighlightLanguages) -> UsedAsse
 
                 if lang == "math" {
                     used_assets.math = true;
-                } else if is_highlighted(languages, lang) {
+                } else if wants_mermaid && lang == "mermaid" {
+                    used_assets.mermaid = true;
+                } else if is_highlighted(options.highlight_languages, lang) {
                     // Code blocks without a language, or with one highlight.js cannot handle, are left alone.
                     used_assets.highlight = true;
                 }
@@ -130,7 +136,7 @@ pub(crate) fn used_assets(root: Node, languages: HighlightLanguages) -> UsedAsse
             _ => (),
         }
 
-        if used_assets.highlight && used_assets.math {
+        if used_assets.highlight && used_assets.math && (used_assets.mermaid || !wants_mermaid) {
             break;
         }
     }

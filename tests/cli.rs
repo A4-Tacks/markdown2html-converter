@@ -156,13 +156,37 @@ fn a_math_asset_needs_the_math_mode_it_belongs_to() {
 
 #[test]
 fn the_highlight_languages_can_be_chosen_on_the_command_line() {
-    let markdown = "```mermaid\ngraph TD;\n```\n";
+    let markdown = "```plantuml\n@startuml\n```\n";
 
     let by_default = convert_stdin(markdown, &[]);
-    let chosen = convert_stdin(markdown, &["--highlight-languages", "mermaid"]);
+    let chosen = convert_stdin(markdown, &["--highlight-languages", "plantuml"]);
 
     assert!(!String::from_utf8(by_default.stdout).unwrap().contains("hljs"));
     assert!(String::from_utf8(chosen.stdout).unwrap().contains("hljs"));
+}
+
+#[test]
+fn the_mermaid_mode_can_be_chosen_on_the_command_line() {
+    let markdown = "```mermaid\ngraph TD; A-->B;\n```\n";
+
+    let by_default = convert_stdin(markdown, &[]);
+    let embedded = convert_stdin(markdown, &["--mermaid-mode", "embedded"]);
+
+    assert!(by_default.status.success());
+    assert!(embedded.status.success());
+    assert!(String::from_utf8(by_default.stdout).unwrap().contains("npm/mermaid"));
+    assert!(!String::from_utf8(embedded.stdout).unwrap().contains("npm/mermaid"));
+}
+
+#[test]
+fn the_mermaid_mode_conflicts_with_no_mermaid() {
+    let output = convert_stdin("```mermaid\ngraph TD;\n```\n", &[
+        "--no-mermaid",
+        "--mermaid-mode",
+        "client",
+    ]);
+
+    assert!(!output.status.success());
 }
 
 #[test]

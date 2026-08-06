@@ -34,6 +34,8 @@ Options:
       --highlight-languages <LANGUAGES>          Specify which code block languages make highlight.js be embedded, separated by commas, or `any` for all of them [default: the languages of the built-in highlight.js]
       --math-mode <MATH_MODE>                    Specify how the math is rendered [possible values: mathjax-embedded, mathjax-client, katex-embedded, katex-client] [default: katex-client]
       --no-math                                  Do not render math
+      --mermaid-mode <MERMAID_MODE>              Specify how the Mermaid diagrams are rendered [possible values: embedded, client] [default: client]
+      --no-mermaid                               Do not render Mermaid diagrams
       --no-cjk-fonts                             Do not embed CJK fonts
       --no-hardbreaks                            Do not render single line breaks as <br>
       --no-minify                                Do not minify the output HTML
@@ -44,6 +46,7 @@ Options:
       --mathjax-js-path <MATHJAX_JS_PATH>        Specify a custom single-file MathJax bundle
       --katex-js-path <KATEX_JS_PATH>            Specify a custom KaTeX file
       --katex-css-path <KATEX_CSS_PATH>          Specify custom CSS for KaTeX
+      --mermaid-js-path <MERMAID_JS_PATH>        Specify a custom single-file Mermaid bundle
   -h, --help                                     Print help
   -V, --version                                  Print version
 ```
@@ -61,7 +64,7 @@ When an output file is explicitly specified with `-o` (`--output`), its file nam
 
 ## Custom Assets
 
-`--css-path` replaces the built-in Markdown stylesheet. `--extra-css-path` is appended after every generated stylesheet, so it can override any built-in or custom styles. `--highlight-js-path`, `--highlight-css-path`, `--mathjax-js-path`, `--katex-js-path`, and `--katex-css-path` replace their respective built-in assets. Each of the math assets can only be used with the mode it belongs to, so `--mathjax-js-path` needs `--math-mode mathjax-embedded`, and the two KaTeX ones need `--math-mode katex-embedded`.
+`--css-path` replaces the built-in Markdown stylesheet. `--extra-css-path` is appended after every generated stylesheet, so it can override any built-in or custom styles. `--highlight-js-path`, `--highlight-css-path`, `--mathjax-js-path`, `--katex-js-path`, `--katex-css-path`, and `--mermaid-js-path` replace their respective built-in assets. Each of these assets can only be used with the mode it belongs to, so `--mathjax-js-path` needs `--math-mode mathjax-embedded`, the two KaTeX ones need `--math-mode katex-embedded`, and `--mermaid-js-path` needs `--mermaid-mode embedded`.
 
 `--highlight-js-path` does not change which languages make **highlight.js** be embedded, which is still the language list of the built-in build. When a custom build supports other languages, pass `--highlight-languages` as well, either with the languages you use or with `any`.
 
@@ -75,7 +78,9 @@ Only the images which stay inside the base path are embedded. Remote URLs, `data
 
 Markdown is converted to HTML by the [comrak](https://crates.io/crates/comrak) crate, with the GFM extensions (tables, task lists, footnotes, autolinks, strikethrough, [alerts](https://github.com/orgs/community/discussions/16925)) enabled. The default stylesheet (the CSS file) is from [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css).
 
-If ` ``` ` is used with one of the languages below in the input Markdown file, the [highlight.js](https://highlightjs.org/) will be automatically embedded in the output HTML file. Any other language, such as ` ```mermaid `, leaves it out, because the built-in **highlight.js** could not do anything with it anyway. Use `--highlight-languages` to change that list. Aliases such as `js` and `c++` work too, and the matching ignores the case.
+If ` ``` ` is used with one of the languages below in the input Markdown file, the [highlight.js](https://highlightjs.org/) will be automatically embedded in the output HTML file. Any other language, such as ` ```plantuml `, leaves it out, because the built-in **highlight.js** could not do anything with it anyway. Use `--highlight-languages` to change that list. Aliases such as `js` and `c++` work too, and the matching ignores the case.
+
+` ```math ` and ` ```mermaid ` are not on this list either. They are handled by a math renderer and by **Mermaid**, which are described below.
 
 * Apache
 * Bash
@@ -143,19 +148,36 @@ The built-in **MathJax** is the [tex-mml-svg](https://docs.mathjax.org/en/latest
 
 Use `--no-math` to leave the math alone. The delimiters are then not treated as math at all, so a `$` in the text stays a `$`.
 
+## Mermaid
+
+A ` ```mermaid ` block is drawn as a diagram by [Mermaid](https://mermaid.js.org/). `--mermaid-mode` picks how the library travels with the output HTML file, the same way `--math-mode` does. The sizes below are what each mode adds to a file which contains a diagram.
+
+| Mode | Added | Works offline | Notes |
+| --- | --- | --- | --- |
+| `client` (default) | ~0 | no | Loads **Mermaid** from a CDN |
+| `embedded` | ~3.4 MB | yes | Embeds the whole **Mermaid** bundle |
+
+The built-in **Mermaid** is the UMD build, which carries every diagram type in one file. The ES module build is smaller to start with, but it loads the rest on demand, so it could never work offline.
+
+The diagrams follow the color theme, so `--theme dark` and the `prefers-color-scheme` media feature switch them to the dark **Mermaid** theme as well.
+
+Use `--no-mermaid` to leave a ` ```mermaid ` block as an ordinary code block. It is then just code, so `--highlight-languages mermaid` can make **highlight.js** colour the source instead.
+
 ## Themes
 
 By default, the output HTML file follows the `prefers-color-scheme` media feature. Use `--theme light` or `--theme dark` to always use one of them.
 
 ## Offline Usage
 
-The default math mode loads **KaTeX** from a CDN, so a file which contains math needs the network. Pick an embedded math mode to avoid that.
+The default math and Mermaid modes load their library from a CDN, so a file which contains math or a diagram needs the network. Pick the embedded modes to avoid that.
 
 ```bash
-markdown2html-converter /path/to/file.md --math-mode katex-embedded --no-cjk-fonts --embed-images
+markdown2html-converter /path/to/file.md --math-mode katex-embedded --mermaid-mode embedded --no-cjk-fonts --embed-images
 ```
 
-`--math-mode katex-embedded` (or `mathjax-embedded`) keeps the math renderer inside the file, `--no-cjk-fonts` drops the only other CDN reference, and `--embed-images` inlines the local images it refers to. The result is a completely self-contained HTML file.
+`--math-mode katex-embedded` (or `mathjax-embedded`) keeps the math renderer inside the file, `--mermaid-mode embedded` does the same for the diagrams, `--no-cjk-fonts` drops the only other CDN reference, and `--embed-images` inlines the local images it refers to. The result is a completely self-contained HTML file.
+
+Each embedded library is only written when the document actually uses it, so a file with no math and no diagram stays small either way.
 
 ## Updating the Built-in Assets
 
@@ -173,7 +195,9 @@ node tools/build-katex-css.js /path/to/katex/dist > resources/katex.min.css
 node tools/list-highlight-languages.js resources/highlight.min.js
 ```
 
-The CDN URLs of the client math modes are pinned in `src/resources.rs` and have to be moved together with the files above, so that every mode renders the same math.
+`resources/mermaid.min.js` is taken from the `dist` directory of the **Mermaid** package as-is. It has to be `mermaid.min.js`, the UMD build, and not one of the `.mjs` files, because those load the diagram types from separate chunks at runtime.
+
+The CDN URLs of the client modes are pinned in `src/resources.rs` and have to be moved together with the files above, so that every mode renders the same output.
 
 ## A Markdown Example
 

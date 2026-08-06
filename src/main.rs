@@ -91,6 +91,7 @@ fn main() -> anyhow::Result<()> {
     let mathjax_js = read_asset(args.mathjax_js_path.as_deref())?;
     let katex_js = read_asset(args.katex_js_path.as_deref())?;
     let katex_css = read_asset(args.katex_css_path.as_deref())?;
+    let mermaid_js = read_asset(args.mermaid_js_path.as_deref())?;
 
     let highlight_languages: Option<Vec<&str>> = args
         .highlight_languages
@@ -114,6 +115,7 @@ fn main() -> anyhow::Result<()> {
             None => HighlightLanguages::BuiltIn,
         },
         math:                if args.no_math { None } else { Some(args.math_mode) },
+        mermaid:             if args.no_mermaid { None } else { Some(args.mermaid_mode) },
         cjk_fonts:           !args.no_cjk_fonts,
         minify:              !args.no_minify,
         embed_images:        args.embed_images,
@@ -129,6 +131,7 @@ fn main() -> anyhow::Result<()> {
         mathjax_js:          mathjax_js.as_deref(),
         katex_js:            katex_js.as_deref(),
         katex_css:           katex_css.as_deref(),
+        mermaid_js:          mermaid_js.as_deref(),
     };
 
     let html = markdown2html_converter::convert(markdown.as_str(), &options)?;

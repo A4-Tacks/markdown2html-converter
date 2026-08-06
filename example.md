@@ -429,3 +429,52 @@ A math block works as well:
 ```math
 \frac{\partial u}{\partial t} = h^2 \left( \frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2} \right)
 ```
+
+## Mermaid
+
+A `mermaid` block is drawn as a diagram instead of being shown as code.
+
+Flowchart
+
+```mermaid
+flowchart LR
+    A[Markdown file] --> B{Has math?}
+    B -- yes --> C[Add the math renderer]
+    B -- no --> D[Leave it out]
+    C --> E[One HTML file]
+    D --> E
+```
+
+Sequence diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Converter
+    participant F as HTML file
+    U->>C: markdown2html-converter example.md
+    C->>C: Parse the Markdown
+    C->>C: Embed the CSS and the JS
+    C->>F: Write example.html
+    F-->>U: Open it in a browser
+```
+
+State diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Reading
+    Reading --> Parsing
+    Parsing --> Rendering
+    Rendering --> Minifying
+    Minifying --> [*]
+```
+
+Pie chart
+
+```mermaid
+pie title Bytes a file with embedded KaTeX carries
+    "KaTeX fonts and stylesheet" : 369
+    "KaTeX script" : 272
+    "Markdown stylesheet" : 31
+```
