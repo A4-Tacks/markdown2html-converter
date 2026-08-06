@@ -1,28 +1,27 @@
-use html_minifier::{HTMLMinifier, HTMLMinifierError};
+use html_minifier::{HTMLMinifierError, HTMLMinifierHelper};
 
 /// The output buffer, which either minifies what it is given or keeps it as-is.
-pub(crate) enum Output {
-    Minified(Box<HTMLMinifier>),
-    Plain(Vec<u8>),
+pub(crate) struct Output {
+    /// The minifier only holds the state of its scanner, so the output buffer stays here and can be given a capacity.
+    minifier: Option<HTMLMinifierHelper>,
+    buffer:   Vec<u8>,
 }
 
 impl Output {
-    /// `capacity` is only a hint for the plain variant, because the minifier owns its buffer and cannot be given one.
     #[inline]
     pub(crate) fn new(minify: bool, capacity: usize) -> Self {
-        if minify {
-            Self::Minified(Box::new(HTMLMinifier::new()))
-        } else {
-            Self::Plain(Vec::with_capacity(capacity))
+        Self {
+            minifier: minify.then(HTMLMinifierHelper::new),
+            buffer:   Vec::with_capacity(capacity),
         }
     }
 
     #[inline]
     pub(crate) fn digest<S: AsRef<[u8]>>(&mut self, text: S) -> Result<(), HTMLMinifierError> {
-        match self {
-            Self::Minified(minifier) => minifier.digest(text),
-            Self::Plain(buffer) => {
-                buffer.extend_from_slice(text.as_ref());
+        match self.minifier {
+            Some(ref mut minifier) => minifier.digest(text, &mut self.buffer),
+            None => {
+                self.buffer.extend_from_slice(text.as_ref());
 
                 Ok(())
             },
@@ -34,11 +33,7 @@ impl Output {
     /// The minifier holds the content of a `style` or a `script` element back until the closing tag, while this method writes straight to the output buffer. Mixing the two inside one element would therefore swap their order, so this method has to cover the whole content of an element.
     #[inline]
     fn indigest<S: AsRef<[u8]>>(&mut self, text: S) {
-        match self {
-            // `indigest` only appends bytes to the output buffer, so there is no safety contract to uphold here.
-            Self::Minified(minifier) => unsafe { minifier.indigest(text) },
-            Self::Plain(buffer) => buffer.extend_from_slice(text.as_ref()),
-        }
+        self.buffer.extend_from_slice(text.as_ref());
     }
 
     #[inline]
@@ -110,9 +105,6 @@ impl Output {
 
     #[inline]
     pub(crate) fn into_html(self) -> Vec<u8> {
-        match self {
-            Self::Minified(minifier) => minifier.get_html().to_vec(),
-            Self::Plain(buffer) => buffer,
-        }
+        self.buffer
     }
 }

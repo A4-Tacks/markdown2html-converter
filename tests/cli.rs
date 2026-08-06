@@ -107,6 +107,28 @@ fn the_markdown_file_cannot_be_overwritten() {
 }
 
 #[test]
+fn a_hard_link_to_the_markdown_file_cannot_be_overwritten() {
+    let dir = temp_dir("protect-input-hard-link");
+    let markdown_path = dir.join("readme.md");
+    let html_path = dir.join("readme.html");
+
+    fs::write(markdown_path.as_path(), "# Original Markdown").unwrap();
+    fs::hard_link(markdown_path.as_path(), html_path.as_path()).unwrap();
+
+    let status = Command::new(EXECUTABLE)
+        .arg(markdown_path.as_path())
+        .arg("-o")
+        .arg(html_path.as_path())
+        .arg("--force")
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+
+    assert!(!status.success());
+    assert_eq!("# Original Markdown", fs::read_to_string(markdown_path.as_path()).unwrap());
+}
+
+#[test]
 fn an_existing_html_file_is_only_overwritten_with_force() {
     let dir = temp_dir("force");
     let markdown_path = dir.join("readme.md");

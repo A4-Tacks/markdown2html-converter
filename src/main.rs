@@ -10,6 +10,7 @@ use std::{
 use anyhow::{Context, anyhow};
 use cli::*;
 use markdown2html_converter::{ConvertOptions, HighlightLanguages};
+use same_file::is_same_file;
 
 /// The path which stands for the standard input or the standard output.
 const STDIO_PATH: &str = "-";
@@ -27,6 +28,13 @@ fn main() -> anyhow::Result<()> {
             .is_dir()
     {
         return Err(anyhow!("{:?} is a directory!", args.markdown_path));
+    }
+
+    // A base path which cannot be resolved would otherwise leave every image unembedded without a word.
+    if let Some(base_path) = args.base_path.as_deref()
+        && !base_path.metadata().with_context(|| anyhow!("{base_path:?}"))?.is_dir()
+    {
+        return Err(anyhow!("{base_path:?} is not a directory!"));
     }
 
     let input_file_stem = if from_stdin {
@@ -160,10 +168,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn paths_resolve_to_same_file(first: &Path, second: &Path) -> io::Result<bool> {
-    let first = fs::canonicalize(first)?;
-
-    match fs::canonicalize(second) {
-        Ok(second) => Ok(first == second),
+    match is_same_file(first, second) {
+        Ok(same_file) => Ok(same_file),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }

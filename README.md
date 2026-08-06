@@ -74,6 +74,8 @@ Custom CSS and JavaScript are embedded in the generated HTML. Use only trusted f
 
 Only the images which stay inside the base path are embedded. Remote URLs, `data` URLs, and absolute paths such as `/pictures/pic.png` or `C:\pictures\pic.png` are left untouched, and so are the paths which climb out of the base path with `..` or through a symbolic link.
 
+Only the Markdown image syntax, `![alt](pic.png)`, is embedded. A raw `<img>` element, which needs `--unsafe` to survive at all, keeps its `src` as it is.
+
 ## Dependency
 
 Markdown is converted to HTML by the [comrak](https://crates.io/crates/comrak) crate, with the GFM extensions (tables, task lists, footnotes, autolinks, strikethrough, [alerts](https://github.com/orgs/community/discussions/16925)) enabled. The default stylesheet (the CSS file) is from [sindresorhus/github-markdown-css](https://github.com/sindresorhus/github-markdown-css).

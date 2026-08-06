@@ -25,6 +25,9 @@ pub const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const FALLBACK_TITLE: &str = "Untitled";
 
+/// An allowance for the parts of the output whose size does not depend on the options: the doctype, the meta elements, the title, and the tags around every stylesheet and script.
+const SCAFFOLDING_CAPACITY: usize = 512;
+
 /// Convert a Markdown text to a single HTML file with built-in CSS and JS.
 ///
 /// ```rust
@@ -219,35 +222,66 @@ fn output_capacity(
     math_mode: Option<MathMode>,
     mermaid_mode: Option<MermaidMode>,
 ) -> usize {
+    let page_theme = match options.theme {
+        Theme::Auto => 0,
+        Theme::Light => PAGE_CSS_LIGHT.len(),
+        Theme::Dark => PAGE_CSS_DARK.len(),
+    };
+
+    let markdown_css = match options.css {
+        Some(css) => css.len(),
+        None => match options.theme {
+            Theme::Auto => MARKDOWN_CSS.len(),
+            Theme::Light => MARKDOWN_CSS_LIGHT.len(),
+            Theme::Dark => MARKDOWN_CSS_DARK.len(),
+        },
+    };
+
     let code = if has_code {
-        options.highlight_js.map_or(HIGHLIGHT_JS.len(), str::len)
-            + options
-                .highlight_css
-                .map_or(HIGHLIGHT_CSS_LIGHT.len() + HIGHLIGHT_CSS_DARK.len(), str::len)
+        let css = match options.highlight_css {
+            Some(css) => css.len(),
+            None => match options.theme {
+                Theme::Auto => HIGHLIGHT_CSS_LIGHT.len() + HIGHLIGHT_CSS_DARK.len(),
+                Theme::Light => HIGHLIGHT_CSS_LIGHT.len(),
+                Theme::Dark => HIGHLIGHT_CSS_DARK.len(),
+            },
+        };
+
+        options.highlight_js.map_or(HIGHLIGHT_JS.len(), str::len) + css + HIGHLIGHT_CODE_JS.len()
     } else {
         0
     };
 
     let math = match math_mode {
-        Some(MathMode::MathJaxEmbedded) => options.mathjax_js.map_or(MATH_JAX_JS.len(), str::len),
+        Some(MathMode::MathJaxEmbedded) => {
+            MATH_JAX_CONFIG_JS.len() + options.mathjax_js.map_or(MATH_JAX_JS.len(), str::len)
+        },
+        Some(MathMode::MathJaxClient) => MATH_JAX_CONFIG_JS.len(),
         Some(MathMode::KatexEmbedded) => {
             options.katex_js.map_or(KATEX_JS.len(), str::len)
                 + options.katex_css.map_or(KATEX_CSS.len(), str::len)
+                + KATEX_RENDER_JS.len()
         },
-        _ => 0,
+        Some(MathMode::KatexClient) => KATEX_RENDER_JS.len(),
+        None => 0,
     };
 
     let mermaid = match mermaid_mode {
-        Some(MermaidMode::Embedded) => options.mermaid_js.map_or(MERMAID_JS.len(), str::len),
-        _ => 0,
+        Some(MermaidMode::Embedded) => {
+            options.mermaid_js.map_or(MERMAID_JS.len(), str::len) + MERMAID_RENDER_JS.len()
+        },
+        Some(MermaidMode::Client) => MERMAID_RENDER_JS.len(),
+        None => 0,
     };
 
     let cjk_fonts =
         if options.cjk_fonts { FONT_CJK_CSS.len() + FONT_CJK_MONO_CSS.len() } else { 0 };
 
-    markdown_html.len()
+    SCAFFOLDING_CAPACITY
+        + markdown_html.len()
         + PAGE_CSS.len()
-        + options.css.map_or(MARKDOWN_CSS.len(), str::len)
+        + page_theme
+        + markdown_css
         + options.extra_css.map_or(0, str::len)
         + cjk_fonts
         + code

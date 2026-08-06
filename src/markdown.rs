@@ -309,8 +309,9 @@ fn hex_digit(byte: u8) -> Option<u8> {
 }
 
 fn image_mime(extension: &str) -> Option<&'static str> {
-    const MIMES: [(&str, &str); 9] = [
+    const MIMES: [(&str, &str); 12] = [
         ("png", "image/png"),
+        ("apng", "image/apng"),
         ("jpg", "image/jpeg"),
         ("jpeg", "image/jpeg"),
         ("gif", "image/gif"),
@@ -319,6 +320,8 @@ fn image_mime(extension: &str) -> Option<&'static str> {
         ("avif", "image/avif"),
         ("bmp", "image/bmp"),
         ("ico", "image/x-icon"),
+        ("tif", "image/tiff"),
+        ("tiff", "image/tiff"),
     ];
 
     MIMES.into_iter().find(|(name, _)| extension.eq_ignore_ascii_case(name)).map(|(_, mime)| mime)
